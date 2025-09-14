@@ -1,0 +1,11 @@
+C:\Users\santi\Desktop\alma-app\src\Domain\bin\Debug\net9.0\AlmaApp.Domain.deps.json
+C:\Users\santi\Desktop\alma-app\src\Domain\bin\Debug\net9.0\AlmaApp.Domain.dll
+C:\Users\santi\Desktop\alma-app\src\Domain\bin\Debug\net9.0\AlmaApp.Domain.pdb
+C:\Users\santi\Desktop\alma-app\src\Domain\obj\Debug\net9.0\AlmaApp.Domain.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\santi\Desktop\alma-app\src\Domain\obj\Debug\net9.0\AlmaApp.Domain.AssemblyInfoInputs.cache
+C:\Users\santi\Desktop\alma-app\src\Domain\obj\Debug\net9.0\AlmaApp.Domain.AssemblyInfo.cs
+C:\Users\santi\Desktop\alma-app\src\Domain\obj\Debug\net9.0\AlmaApp.Domain.csproj.CoreCompileInputs.cache
+C:\Users\santi\Desktop\alma-app\src\Domain\obj\Debug\net9.0\AlmaApp.Domain.dll
+C:\Users\santi\Desktop\alma-app\src\Domain\obj\Debug\net9.0\refint\AlmaApp.Domain.dll
+C:\Users\santi\Desktop\alma-app\src\Domain\obj\Debug\net9.0\AlmaApp.Domain.pdb
+C:\Users\santi\Desktop\alma-app\src\Domain\obj\Debug\net9.0\ref\AlmaApp.Domain.dll

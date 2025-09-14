@@ -1,0 +1,15 @@
+C:\Users\santi\Desktop\alma-app\src\Application\bin\Debug\net9.0\AlmaApp.Application.deps.json
+C:\Users\santi\Desktop\alma-app\src\Application\bin\Debug\net9.0\AlmaApp.Application.dll
+C:\Users\santi\Desktop\alma-app\src\Application\bin\Debug\net9.0\AlmaApp.Application.pdb
+C:\Users\santi\Desktop\alma-app\src\Application\bin\Debug\net9.0\AlmaApp.Domain.dll
+C:\Users\santi\Desktop\alma-app\src\Application\bin\Debug\net9.0\AlmaApp.Domain.pdb
+C:\Users\santi\Desktop\alma-app\src\Application\obj\Debug\net9.0\AlmaApp.Application.csproj.AssemblyReference.cache
+C:\Users\santi\Desktop\alma-app\src\Application\obj\Debug\net9.0\AlmaApp.Application.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\santi\Desktop\alma-app\src\Application\obj\Debug\net9.0\AlmaApp.Application.AssemblyInfoInputs.cache
+C:\Users\santi\Desktop\alma-app\src\Application\obj\Debug\net9.0\AlmaApp.Application.AssemblyInfo.cs
+C:\Users\santi\Desktop\alma-app\src\Application\obj\Debug\net9.0\AlmaApp.Application.csproj.CoreCompileInputs.cache
+C:\Users\santi\Desktop\alma-app\src\Application\obj\Debug\net9.0\AlmaApp..8832022E.Up2Date
+C:\Users\santi\Desktop\alma-app\src\Application\obj\Debug\net9.0\AlmaApp.Application.dll
+C:\Users\santi\Desktop\alma-app\src\Application\obj\Debug\net9.0\refint\AlmaApp.Application.dll
+C:\Users\santi\Desktop\alma-app\src\Application\obj\Debug\net9.0\AlmaApp.Application.pdb
+C:\Users\santi\Desktop\alma-app\src\Application\obj\Debug\net9.0\ref\AlmaApp.Application.dll
