@@ -11,6 +11,7 @@ C:\Users\santi\Desktop\alma-app\src\Infrastructure\obj\Debug\net9.0\AlmaApp.Infr
 C:\Users\santi\Desktop\alma-app\src\Infrastructure\obj\Debug\net9.0\AlmaApp.Infrastructure.AssemblyInfoInputs.cache
 C:\Users\santi\Desktop\alma-app\src\Infrastructure\obj\Debug\net9.0\AlmaApp.Infrastructure.AssemblyInfo.cs
 C:\Users\santi\Desktop\alma-app\src\Infrastructure\obj\Debug\net9.0\AlmaApp.Infrastructure.csproj.CoreCompileInputs.cache
+C:\Users\santi\Desktop\alma-app\src\Infrastructure\obj\Debug\net9.0\AlmaApp.Infrastructure.sourcelink.json
 C:\Users\santi\Desktop\alma-app\src\Infrastructure\obj\Debug\net9.0\AlmaApp..FA6EBE8C.Up2Date
 C:\Users\santi\Desktop\alma-app\src\Infrastructure\obj\Debug\net9.0\AlmaApp.Infrastructure.dll
 C:\Users\santi\Desktop\alma-app\src\Infrastructure\obj\Debug\net9.0\refint\AlmaApp.Infrastructure.dll

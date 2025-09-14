@@ -90,6 +90,7 @@ C:\Users\santi\Desktop\alma-app\tests\UnitTests\obj\Debug\net9.0\AlmaApp.UnitTes
 C:\Users\santi\Desktop\alma-app\tests\UnitTests\obj\Debug\net9.0\AlmaApp.UnitTests.AssemblyInfoInputs.cache
 C:\Users\santi\Desktop\alma-app\tests\UnitTests\obj\Debug\net9.0\AlmaApp.UnitTests.AssemblyInfo.cs
 C:\Users\santi\Desktop\alma-app\tests\UnitTests\obj\Debug\net9.0\AlmaApp.UnitTests.csproj.CoreCompileInputs.cache
+C:\Users\santi\Desktop\alma-app\tests\UnitTests\obj\Debug\net9.0\AlmaApp.UnitTests.sourcelink.json
 C:\Users\santi\Desktop\alma-app\tests\UnitTests\obj\Debug\net9.0\AlmaApp..86E87D97.Up2Date
 C:\Users\santi\Desktop\alma-app\tests\UnitTests\obj\Debug\net9.0\AlmaApp.UnitTests.dll
 C:\Users\santi\Desktop\alma-app\tests\UnitTests\obj\Debug\net9.0\refint\AlmaApp.UnitTests.dll

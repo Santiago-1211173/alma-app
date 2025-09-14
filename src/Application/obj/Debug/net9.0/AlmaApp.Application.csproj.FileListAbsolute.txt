@@ -8,6 +8,7 @@ C:\Users\santi\Desktop\alma-app\src\Application\obj\Debug\net9.0\AlmaApp.Applica
 C:\Users\santi\Desktop\alma-app\src\Application\obj\Debug\net9.0\AlmaApp.Application.AssemblyInfoInputs.cache
 C:\Users\santi\Desktop\alma-app\src\Application\obj\Debug\net9.0\AlmaApp.Application.AssemblyInfo.cs
 C:\Users\santi\Desktop\alma-app\src\Application\obj\Debug\net9.0\AlmaApp.Application.csproj.CoreCompileInputs.cache
+C:\Users\santi\Desktop\alma-app\src\Application\obj\Debug\net9.0\AlmaApp.Application.sourcelink.json
 C:\Users\santi\Desktop\alma-app\src\Application\obj\Debug\net9.0\AlmaApp..8832022E.Up2Date
 C:\Users\santi\Desktop\alma-app\src\Application\obj\Debug\net9.0\AlmaApp.Application.dll
 C:\Users\santi\Desktop\alma-app\src\Application\obj\Debug\net9.0\refint\AlmaApp.Application.dll

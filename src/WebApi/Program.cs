@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using AlmaApp.Infrastructure;
+using AlmaApp.WebApi.Middleware;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Logging;
@@ -8,22 +9,29 @@ using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// ---- EF Core ----
-var cs =
-    builder.Configuration.GetConnectionString("DefaultConnection")
-    ?? Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection");
+// -------------------------
+// 1) SERVICES (antes do Build)
+// -------------------------
 
+builder.Services.AddAuthorization(opts =>
+{
+    opts.AddPolicy("EmailVerified", p => p.RequireClaim("email_verified", "true"));
+});
+
+// EF Core (SQL Server)
+var cs = builder.Configuration.GetConnectionString("DefaultConnection")
+         ?? Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection");
 if (string.IsNullOrWhiteSpace(cs))
     throw new InvalidOperationException("Missing connection string 'DefaultConnection'. Configure em appsettings(.Development).json ou via env var ConnectionStrings__DefaultConnection.");
 
 builder.Services.AddDbContext<AppDbContext>(opts => opts.UseSqlServer(cs));
 
-// ---- Auth (Firebase) ----
+// Auth (Firebase)
 var projectId = builder.Configuration["Firebase:ProjectId"]
     ?? throw new InvalidOperationException("Firebase:ProjectId não configurado. Define em appsettings.Development.json.");
 var authority = $"https://securetoken.google.com/{projectId}";
 
-// logs detalhados de validação (DEV)
+// Logs detalhados de validação (DEV)
 IdentityModelEventSource.ShowPII = true;
 
 builder.Services
@@ -42,24 +50,12 @@ builder.Services
             ValidateLifetime = true,
             ClockSkew = TimeSpan.FromMinutes(2)
         };
-        o.IncludeErrorDetails = true; // devolve motivo no WWW-Authenticate
-
-        // DEV ONLY: ver a exceção no corpo em caso de falha
-        o.Events = new JwtBearerEvents
-        {
-            OnAuthenticationFailed = ctx =>
-            {
-                ctx.NoResult();
-                ctx.Response.StatusCode = 401;
-                ctx.Response.ContentType = "text/plain";
-                return ctx.Response.WriteAsync(ctx.Exception.ToString());
-            }
-        };
+        o.IncludeErrorDetails = true; // motivo no header WWW-Authenticate (DEV)
     });
 
 builder.Services.AddAuthorization();
 
-// ---- Controllers & Swagger ----
+// Controllers + Swagger
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
@@ -80,32 +76,50 @@ builder.Services.AddSwaggerGen(c =>
     c.AddSecurityRequirement(new OpenApiSecurityRequirement { { securityScheme, Array.Empty<string>() } });
 });
 
+// CORS (para o teu front em dev)
+builder.Services.AddCors(o => o.AddPolicy("dev", p =>
+    p.WithOrigins("http://localhost:5173", "http://localhost:3000", "http://localhost:4200")
+     .AllowAnyHeader()
+     .AllowAnyMethod()
+));
+
+// Health checks
 builder.Services.AddHealthChecks();
-// (opcional) logs de auth detalhados
+
+// (opcional) filtros de logging para auth
 builder.Logging.AddFilter("Microsoft.AspNetCore.Authentication", LogLevel.Debug);
 builder.Logging.AddFilter("Microsoft.IdentityModel", LogLevel.Debug);
 
+// -------------------------
+// 2) BUILD
+// -------------------------
 var app = builder.Build();
 
-// ---- Dev: Swagger + seeder ----
+// -------------------------
+// 3) MIDDLEWARES
+// -------------------------
+app.UseMiddleware<ProblemDetailsMiddleware>(); // mapeia violação de unique -> 409
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
 
+    // Seed de dados DEV
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     await AlmaApp.WebApi.DevSeeder.SeedAsync(db);
 }
 
 app.UseHttpsRedirection();
-app.UseAuthentication(); // <- antes do Authorization
+app.UseCors("dev");
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapHealthChecks("/healthz");
 app.MapControllers();
 
-// /me: inspeciona o token autenticado
+// /me: devolve info básica do token autenticado
 app.MapGet("/me", (ClaimsPrincipal user) =>
 {
     if (!user.Identity?.IsAuthenticated ?? true) return Results.Unauthorized();
@@ -117,9 +131,10 @@ app.MapGet("/me", (ClaimsPrincipal user) =>
     });
 }).RequireAuthorization();
 
-// qualidade de vida: raiz → Swagger
+// Qualidade de vida: raiz -> Swagger
 app.MapGet("/", () => Results.Redirect("/swagger"));
 
 app.Run();
 
+// Necessário para WebApplicationFactory nos testes
 public partial class Program { }

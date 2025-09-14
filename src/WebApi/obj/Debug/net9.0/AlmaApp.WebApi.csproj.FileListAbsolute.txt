@@ -163,6 +163,7 @@ C:\Users\santi\Desktop\alma-app\src\WebApi\obj\Debug\net9.0\AlmaApp.WebApi.Assem
 C:\Users\santi\Desktop\alma-app\src\WebApi\obj\Debug\net9.0\AlmaApp.WebApi.csproj.CoreCompileInputs.cache
 C:\Users\santi\Desktop\alma-app\src\WebApi\obj\Debug\net9.0\AlmaApp.WebApi.MvcApplicationPartsAssemblyInfo.cs
 C:\Users\santi\Desktop\alma-app\src\WebApi\obj\Debug\net9.0\AlmaApp.WebApi.MvcApplicationPartsAssemblyInfo.cache
+C:\Users\santi\Desktop\alma-app\src\WebApi\obj\Debug\net9.0\AlmaApp.WebApi.sourcelink.json
 C:\Users\santi\Desktop\alma-app\src\WebApi\obj\Debug\net9.0\rjimswa.dswa.cache.json
 C:\Users\santi\Desktop\alma-app\src\WebApi\obj\Debug\net9.0\rjsmrazor.dswa.cache.json
 C:\Users\santi\Desktop\alma-app\src\WebApi\obj\Debug\net9.0\rjsmcshtml.dswa.cache.json

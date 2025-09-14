@@ -5,6 +5,7 @@ C:\Users\santi\Desktop\alma-app\src\Domain\obj\Debug\net9.0\AlmaApp.Domain.Gener
 C:\Users\santi\Desktop\alma-app\src\Domain\obj\Debug\net9.0\AlmaApp.Domain.AssemblyInfoInputs.cache
 C:\Users\santi\Desktop\alma-app\src\Domain\obj\Debug\net9.0\AlmaApp.Domain.AssemblyInfo.cs
 C:\Users\santi\Desktop\alma-app\src\Domain\obj\Debug\net9.0\AlmaApp.Domain.csproj.CoreCompileInputs.cache
+C:\Users\santi\Desktop\alma-app\src\Domain\obj\Debug\net9.0\AlmaApp.Domain.sourcelink.json
 C:\Users\santi\Desktop\alma-app\src\Domain\obj\Debug\net9.0\AlmaApp.Domain.dll
 C:\Users\santi\Desktop\alma-app\src\Domain\obj\Debug\net9.0\refint\AlmaApp.Domain.dll
 C:\Users\santi\Desktop\alma-app\src\Domain\obj\Debug\net9.0\AlmaApp.Domain.pdb

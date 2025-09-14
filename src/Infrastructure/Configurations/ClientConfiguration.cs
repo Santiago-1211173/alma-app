@@ -10,6 +10,7 @@ public sealed class ClientConfiguration : IEntityTypeConfiguration<Client>
     {
         e.ToTable("Clients");
         e.HasKey(x => x.Id);
+        e.Property(x => x.Id).ValueGeneratedOnAdd();
 
         e.Property(x => x.FirstName).HasMaxLength(100).IsRequired();
         e.Property(x => x.LastName).HasMaxLength(100).IsRequired();

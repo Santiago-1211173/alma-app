@@ -1,14 +1,28 @@
-version: "3.9"
 services:
   sqlserver:
-    image: mcr.microsoft.com/mssql/server:2022-latest
+    image: mcr.microsoft.com/mssql/server:2022-CU21-ubuntu-22.04
     container_name: alma-sql
     environment:
-      ACCEPT_EULA: "Y"
-      MSSQL_SA_PASSWORD: "Str0ng!Passw0rd"  
+      - ACCEPT_EULA=Y
+      - MSSQL_SA_PASSWORD=Str0ng!Passw0rd
     ports:
       - "1433:1433"
     volumes:
-      - mssql_data:/var/opt/mssql
+      - mssqldata:/var/opt/mssql
+
+  webapi:
+    build:
+      context: .
+      dockerfile: src/WebApi/Dockerfile
+    container_name: alma-webapi
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Server=sqlserver,1433;Database=alma_app_dev;User Id=sa;Password=Str0ng!Passw0rd;TrustServerCertificate=True;
+      - Firebase__ProjectId=almaapp-auth
+    ports:
+      - "5000:8080"   # Swagger em http://localhost:5000/swagger
+    depends_on:
+      - sqlserver
+
 volumes:
-  mssql_data:
+  mssqldata:
