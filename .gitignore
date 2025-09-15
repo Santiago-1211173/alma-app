@@ -1,0 +1,66 @@
+# .gitignore recomendado para o projeto AlmaApp (.NET)
+# Baseado no template oficial de Visual Studio do repositório github/gitignore e boas práticas.
+
+# Resultado de builds
+# O template oficial do GitHub para Visual Studio ignora pastas de Debug/Release e diretórios bin/obj para não versionar os artefatos de compilaçãohttps://raw.githubusercontent.com/github/gitignore/main/VisualStudio.gitignore#:~:text=,Rr%5Deleases.
+**/bin/
+**/obj/
+**/out/
+**/[Dd]ebug*/
+**/[Rr]elease*/
+
+# Diretório de configuração do Visual Studio
+# O diretório .vs guarda dados temporários e é recomendado ignorá‑lohttps://raw.githubusercontent.com/github/gitignore/main/VisualStudio.gitignore#:~:text=,wwwroot.
+.vs/
+
+# Ficheiros específicos de utilizador
+*.user
+*.userosscache
+*.suo
+*.sln.docstates
+*.rsuser
+*.csproj.user
+
+# Ficheiros de log e temporários
+*.log
+*.tmp
+*.tmp_proj
+*.[Cc]ache
+
+# Resultados de testes
+# O template recomenda ignorar pastas TestResult e ficheiros .trx gerados pelo MSTesthttps://raw.githubusercontent.com/github/gitignore/main/VisualStudio.gitignore#:~:text=,trx.
+[Tt]est[Rr]esult*/
+*.trx
+[Bb]uild[Ll]og.*
+
+# Artefactos do .NET Core e ferramentas
+project.lock.json
+project.fragment.lock.json
+artifacts/
+BenchmarkDotNet.Artifacts/
+
+# Pacotes NuGet
+# A pasta packages não precisa ser versionada porque o NuGet restaura os pacoteshttps://raw.githubusercontent.com/github/gitignore/main/VisualStudio.gitignore#:~:text=,used%20as%20an%20MSBuild%20target.
+*.nupkg
+*.snupkg
+**/[Pp]ackages/*
+!**/[Pp]ackages/build/
+
+# Saída de publicação
+publish/
+*.[Pp]ublish.xml
+*.azurePubxml
+*.pubxml
+*.publishproj
+
+# Ficheiros de cobertura de código
+coverage*.json
+coverage*.xml
+coverage*.info
+*.coverage
+*.coveragexml
+
+# Configurações locais (podem conter segredos)
+# Ignora ficheiros appsettings de ambiente, excepto o principal.
+appsettings.*.json
+!appsettings.json
