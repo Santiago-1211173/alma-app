@@ -5,6 +5,8 @@ using System.Threading.Tasks;
 using AlmaApp.Domain.Clients;
 using AlmaApp.Infrastructure;
 using Microsoft.EntityFrameworkCore;
+using AlmaApp.Domain.Staff;
+using AlmaApp.Domain.Rooms;
 
 namespace AlmaApp.WebApi;
 
@@ -26,6 +28,23 @@ internal static class DevSeeder
             var phone = $"+35191{i:0000000}";
             var birth = new DateOnly(1990 + (i % 10), (i % 12) + 1, ((i % 27) + 1));
             list.Add(new Client(first, last, cc, email, phone, birth));
+        }
+
+        if (!await db.Staff.AnyAsync())
+        {
+            db.Staff.AddRange(
+                new Staff("João", "Pereira", "joao.staff@example.com", "+351910000001", "STF-001", "Fisioterapia"),
+                new Staff("Marta", "Costa", "marta.staff@example.com", "+351910000002", "STF-002", "Pilates")
+            );
+            await db.SaveChangesAsync();
+        }
+
+        if (!await db.Rooms.AnyAsync())
+        {
+            db.Rooms.AddRange(
+                new Room("Sala A", 12, true),
+                new Room("Sala B", 8, true)
+            );
         }
 
         await db.AddRangeAsync(list);

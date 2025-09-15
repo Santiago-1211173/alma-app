@@ -1,28 +1,32 @@
 services:
   sqlserver:
-    image: mcr.microsoft.com/mssql/server:2022-CU21-ubuntu-22.04
-    container_name: alma-sql
+    image: mcr.microsoft.com/mssql/server:2022-latest
     environment:
-      - ACCEPT_EULA=Y
-      - MSSQL_SA_PASSWORD=Str0ng!Passw0rd
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "Teste12345!"   
     ports:
       - "1433:1433"
     volumes:
-      - mssqldata:/var/opt/mssql
+      - mssql_data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$${MSSQL_SA_PASSWORD}\" -C -Q \"SELECT 1\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
 
   webapi:
-    build:
-      context: .
-      dockerfile: src/WebApi/Dockerfile
-    container_name: alma-webapi
+    build: .
     environment:
-      - ASPNETCORE_ENVIRONMENT=Development
-      - ConnectionStrings__DefaultConnection=Server=sqlserver,1433;Database=alma_app_dev;User Id=sa;Password=Str0ng!Passw0rd;TrustServerCertificate=True;
-      - Firebase__ProjectId=almaapp-auth
+      ASPNETCORE_ENVIRONMENT: "Docker"
+      ASPNETCORE_URLS: "http://+:8080"
+      Firebase__ProjectId: "o_teu_projectId"
+      ConnectionStrings__DefaultConnection: "Server=sqlserver,1433;Database=alma_app_dev;User Id=sa;Password=Teste12345!;Encrypt=True;TrustServerCertificate=True;MultipleActiveResultSets=True" # <<< QUOTED
     ports:
-      - "5000:8080"   # Swagger em http://localhost:5000/swagger
+      - "8080:8080"
     depends_on:
-      - sqlserver
+      sqlserver:
+        condition: service_healthy
 
 volumes:
-  mssqldata:
+  mssql_data:
