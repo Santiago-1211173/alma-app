@@ -13,6 +13,9 @@ var builder = WebApplication.CreateBuilder(args);
 // -------------------------
 // 1) SERVICES (antes do Build)
 // -------------------------
+// Necessário para aceder ao HttpContext (e.g. obter user id do token)
+builder.Services.AddHttpContextAccessor();
+
 
 // Policies
 builder.Services.AddAuthorization(opts =>
