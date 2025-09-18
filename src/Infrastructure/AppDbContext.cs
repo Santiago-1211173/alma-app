@@ -19,6 +19,10 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> opts) : DbContex
     public DbSet<ClassRequest> ClassRequests => Set<ClassRequest>();
     public DbSet<Class> Classes => Set<Class>();
     public DbSet<Domain.Auth.RoleAssignment> RoleAssignments => Set<Domain.Auth.RoleAssignment>();
+    public DbSet<Domain.Availability.StaffAvailabilityRule> StaffAvailabilityRules => Set<Domain.Availability.StaffAvailabilityRule>();
+    public DbSet<Domain.Availability.StaffTimeOff> StaffTimeOffs => Set<Domain.Availability.StaffTimeOff>();
+    public DbSet<Domain.Availability.RoomClosure> RoomClosures => Set<Domain.Availability.RoomClosure>();
+
 
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
