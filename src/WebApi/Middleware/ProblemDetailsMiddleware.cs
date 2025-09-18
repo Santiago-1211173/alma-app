@@ -37,6 +37,23 @@ public sealed class ProblemDetailsMiddleware
                 });
             }
         }
+        catch (DbUpdateException ex) when (IsDataTruncation(ex, out var hint))
+        {
+            _log.LogWarning(ex, "String or binary data would be truncated");
+
+            if (!ctx.Response.HasStarted)
+            {
+                ctx.Response.StatusCode = (int)HttpStatusCode.BadRequest;
+                ctx.Response.ContentType = "application/problem+json";
+                await ctx.Response.WriteAsJsonAsync(new
+                {
+                    type = "https://httpstatuses.com/400",
+                    title = "Dados inválidos",
+                    detail = hint ?? "Um dos campos enviados excede o tamanho máximo permitido.",
+                    status = 400
+                });
+            }
+        }
     }
 
     private static bool IsUniqueViolation(DbUpdateException ex)
@@ -49,5 +66,30 @@ public sealed class ProblemDetailsMiddleware
             return true;
 
         return false;
+    }
+
+    private static bool IsDataTruncation(DbUpdateException ex, out string? hint)
+    {
+        hint = null;
+
+        // SQL Server: 2628 - String or binary data would be truncated in table '...', column '...'
+        SqlException? sql = ex.InnerException as SqlException
+                            ?? ex.InnerException?.InnerException as SqlException;
+
+        if (sql is null || sql.Number != 2628) return false;
+
+        // A mensagem geralmente inclui tabela e coluna; damos uma dica específica quando possível.
+        var message = sql.Message ?? string.Empty;
+        if (message.Contains("RoleAssignments", StringComparison.OrdinalIgnoreCase)
+            && message.Contains("FirebaseUid", StringComparison.OrdinalIgnoreCase))
+        {
+            hint = "O valor para FirebaseUid é demasiado longo. Verifica se não estás a enviar o token JWT inteiro em vez do Firebase UID (usa o UID devolvido por /whoami).";
+        }
+        else
+        {
+            hint = "Um dos campos enviados excede o tamanho máximo permitido pela base de dados.";
+        }
+
+        return true;
     }
 }

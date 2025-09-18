@@ -10,6 +10,7 @@ public class ClassRequest
     public Guid Id { get; private set; }
     public Guid ClientId { get; private set; }
     public Guid StaffId  { get; private set; }
+    public Guid RoomId   { get; private set; }  // NOVO: sala proposta já no pedido
     public DateTime ProposedStartUtc { get; private set; }
     public int DurationMinutes { get; private set; } // 15..180
     public string? Notes { get; private set; }
@@ -21,22 +22,25 @@ public class ClassRequest
 
     private ClassRequest() { } // EF
 
-    public ClassRequest(Guid clientId, Guid staffId, DateTime proposedStartUtc, int durationMinutes, string? notes, string createdByUid)
+    public ClassRequest(Guid clientId, Guid staffId, Guid roomId, DateTime proposedStartUtc, int durationMinutes, string? notes, string createdByUid)
     {
         Id = Guid.NewGuid();
-        Update(clientId, staffId, proposedStartUtc, durationMinutes, notes);
+        Update(clientId, staffId, roomId, proposedStartUtc, durationMinutes, notes);
         Status = ClassRequestStatus.Pending;
         CreatedByUid = createdByUid;
         CreatedAtUtc = DateTime.UtcNow;
     }
 
-    public void Update(Guid clientId, Guid staffId, DateTime proposedStartUtc, int durationMinutes, string? notes)
+    public void Update(Guid clientId, Guid staffId, Guid roomId, DateTime proposedStartUtc, int durationMinutes, string? notes)
     {
         if (durationMinutes < 15 || durationMinutes > 180)
             throw new ArgumentOutOfRangeException(nameof(durationMinutes));
+        if (roomId == Guid.Empty)
+            throw new ArgumentException("RoomId obrigatório.", nameof(roomId));
 
         ClientId = clientId;
         StaffId  = staffId;
+        RoomId   = roomId;
         ProposedStartUtc = DateTime.SpecifyKind(proposedStartUtc, DateTimeKind.Utc);
         DurationMinutes  = durationMinutes;
         Notes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim();

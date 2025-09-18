@@ -5,6 +5,8 @@ using System.Threading.Tasks;
 using System.Security.Claims;
 using AlmaApp.Domain.ClassRequests;
 using AlmaApp.Domain.Classes;
+using AlmaApp.Domain.Auth;
+using AlmaApp.Domain.Rooms;
 using AlmaApp.Infrastructure;
 using AlmaApp.WebApi.Common;
 using AlmaApp.WebApi.Common.Auth;
@@ -29,7 +31,7 @@ public sealed class ClassRequestsController(AppDbContext db, IUserContext user, 
     [HttpGet]
     public async Task<ActionResult<PagedResult<ClassRequestListItemDto>>> Search(
         [FromQuery] Guid? clientId, [FromQuery] Guid? staffId,
-        [FromQuery] DateTime? from, [FromQuery] DateTime? to,
+        [FromQuery] DateTime? from, [FromQuery] DateTime? to, [FromQuery] Guid? roomId,
         [FromQuery] int? status, [FromQuery] int page = 1, [FromQuery] int pageSize = 10,
         CancellationToken ct = default)
     {
@@ -40,9 +42,10 @@ public sealed class ClassRequestsController(AppDbContext db, IUserContext user, 
 
         if (clientId is { } cid) q = q.Where(x => x.ClientId == cid);
         if (staffId  is { } sid) q = q.Where(x => x.StaffId == sid);
-        if (from     is { } f)   q = q.Where(x => x.ProposedStartUtc >= DateTime.SpecifyKind(f, DateTimeKind.Utc));
+        if (roomId   is { } rid) q = q.Where(x => x.RoomId == rid);
+        if (from is { } f) q = q.Where(x => x.ProposedStartUtc >= DateTime.SpecifyKind(f, DateTimeKind.Utc));
         if (to       is { } t)   q = q.Where(x => x.ProposedStartUtc <  DateTime.SpecifyKind(t, DateTimeKind.Utc));
-        if (status   is { } st)  q = q.Where(x => (int)x.Status == st);
+        if (status is { } st) q = q.Where(x => (int)x.Status == st);
 
         var total = await q.CountAsync(ct);
 
@@ -68,7 +71,7 @@ public sealed class ClassRequestsController(AppDbContext db, IUserContext user, 
             (int)x.Status, x.CreatedByUid, x.CreatedAtUtc));
     }
 
-    // POST /api/v1/class-requests  (STAFF cria pedido para um CLIENTE)
+    // POST /api/v1/class-requests  (STAFF cria pedido para um CLIENTE, já com RoomId)
     [HttpPost]
     [Authorize(Policy = "Staff")]
     public async Task<IActionResult> CreateForClient(
@@ -103,6 +106,13 @@ public sealed class ClassRequestsController(AppDbContext db, IUserContext user, 
         if (!clientExists)
             return BadRequest(new { detail = "ClientId inválido ou inexistente." });
 
+        // 2.1) Validar RoomId e existência
+        if (body.RoomId == Guid.Empty)
+            return BadRequest(new { detail = "roomId é obrigatório." });
+        var roomExists = await db.Rooms.AsNoTracking().AnyAsync(r => r.Id == body.RoomId, ct);
+        if (!roomExists)
+            return BadRequest(new { detail = "roomId inválido ou inexistente." });
+
         // 3) Validações de negócio (duração + data futura) e normalização para UTC
         if (body.DurationMinutes < 15 || body.DurationMinutes > 180)
             return BadRequest(new { detail = "durationMinutes deve estar entre 15 e 180." });
@@ -114,34 +124,57 @@ public sealed class ClassRequestsController(AppDbContext db, IUserContext user, 
             return Problem(statusCode: 400, title: "Data inválida",
                            detail: "proposedStartUtc deve ser no futuro (UTC).");
 
-        // 4) Conflitos: Pedidos pendentes do mesmo Staff (100% traduzível p/ SQL)
-        var conflictPending = await db.ClassRequests
+        // 4) Conflitos por STAFF (Pending + Scheduled)
+        var conflictPendingStaff = await db.ClassRequests
             .Where(c => c.StaffId == staffId && c.Status == ClassRequestStatus.Pending)
             .AnyAsync(c =>
                 EF.Functions.DateDiffMinute(c.ProposedStartUtc, bStart) < c.DurationMinutes &&
                 EF.Functions.DateDiffMinute(bStart, c.ProposedStartUtc) < bDur,
                 ct);
 
-        if (conflictPending)
+        if (conflictPendingStaff)
             return Problem(statusCode: 409, title: "Conflito de agenda",
                 detail: "Já existe um pedido pendente para este staff no mesmo horário.");
 
-        // 5) Conflitos: Aulas agendadas do mesmo Staff (100% traduzível p/ SQL)
-        var conflictClasses = await db.Classes
+        var conflictClassesStaff = await db.Classes
             .Where(k => k.StaffId == staffId && k.Status == ClassStatus.Scheduled)
             .AnyAsync(k =>
                 EF.Functions.DateDiffMinute(k.StartUtc, bStart) < k.DurationMinutes &&
                 EF.Functions.DateDiffMinute(bStart, k.StartUtc) < bDur,
                 ct);
 
-        if (conflictClasses)
+        if (conflictClassesStaff)
             return Problem(statusCode: 409, title: "Conflito de agenda",
                 detail: "Já existe uma aula agendada para este staff no mesmo horário.");
 
-        // 6) Criar o pedido (Pending)
-        var req = new AlmaApp.Domain.ClassRequests.ClassRequest(
+        // 5) Conflitos por ROOM (Pending + Scheduled)
+        var conflictPendingRoom = await db.ClassRequests
+            .Where(c => c.RoomId == body.RoomId && c.Status == ClassRequestStatus.Pending)
+            .AnyAsync(c =>
+                EF.Functions.DateDiffMinute(c.ProposedStartUtc, bStart) < c.DurationMinutes &&
+                EF.Functions.DateDiffMinute(bStart, c.ProposedStartUtc) < bDur,
+                ct);
+
+        if (conflictPendingRoom)
+            return Problem(statusCode: 409, title: "Conflito de agenda",
+                detail: "Já existe um pedido pendente para esta sala no mesmo horário.");
+
+        var conflictClassesRoom = await db.Classes
+            .Where(k => k.RoomId == body.RoomId && k.Status == ClassStatus.Scheduled)
+            .AnyAsync(k =>
+                EF.Functions.DateDiffMinute(k.StartUtc, bStart) < k.DurationMinutes &&
+                EF.Functions.DateDiffMinute(bStart, k.StartUtc) < bDur,
+                ct);
+
+        if (conflictClassesRoom)
+            return Problem(statusCode: 409, title: "Conflito de agenda",
+                detail: "Já existe uma aula agendada para esta sala no mesmo horário.");
+
+        // 6) Criar o pedido (Pending) — agora com RoomId
+        var req = new ClassRequest(
             clientId: clientId,
             staffId:  staffId,
+            roomId:   body.RoomId,
             proposedStartUtc: bStart,
             durationMinutes:  bDur,
             notes: body.Notes,
@@ -168,13 +201,14 @@ public sealed class ClassRequestsController(AppDbContext db, IUserContext user, 
             .Where(c => c.ClientId == client.Id)
             .OrderByDescending(c => c.ProposedStartUtc)
             .Select(c => new {
-                c.Id, c.StaffId, c.ProposedStartUtc, c.DurationMinutes, c.Status, c.Notes
+                c.Id, c.StaffId, c.RoomId, c.ProposedStartUtc, c.DurationMinutes, c.Status, c.Notes
             })
             .ToListAsync(ct);
 
         return Ok(items);
     }
 
+    // PUT mantém como está (não adicionámos edição de RoomId aqui)
     [HttpPut("{id:guid}")]
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdateClassRequest body, CancellationToken ct)
     {
@@ -197,7 +231,7 @@ public sealed class ClassRequestsController(AppDbContext db, IUserContext user, 
 
         var bDur = body.DurationMinutes;
 
-        // overlap só com PENDENTES de outro registo, para o mesmo Staff
+        // overlap só com PENDENTES de outro registo, para o mesmo Staff (traduzível p/ SQL)
         var overlap = await db.ClassRequests
             .Where(r => r.Id != id &&
                         r.Status == ClassRequestStatus.Pending &&
@@ -214,7 +248,8 @@ public sealed class ClassRequestsController(AppDbContext db, IUserContext user, 
                 Detail = "Já existe um pedido pendente para este staff no mesmo horário."
             });
 
-        req.Update(body.ClientId, body.StaffId, startUtc, body.DurationMinutes, body.Notes);
+        // Mantemos RoomId como está (se quiseres que Update permita alterar RoomId, avisa)
+        req.Update(body.ClientId, body.StaffId, req.RoomId, startUtc, body.DurationMinutes, body.Notes);
         await db.SaveChangesAsync(ct);
         return NoContent();
     }
@@ -226,20 +261,156 @@ public sealed class ClassRequestsController(AppDbContext db, IUserContext user, 
         if (req is null) return NotFound();
         if (req.Status != ClassRequestStatus.Pending)
             return Problem("Só pedidos pendentes podem ser cancelados.", statusCode: 409);
-        if (req.CreatedByUid != user.Uid) return Forbid();
+
+        // Permitir que o autor (Staff) cancele; Admin também poderá cancelar via role
+        var isAdmin = await user.IsInRoleAsync(RoleName.Admin, ct);
+        if (!isAdmin && req.CreatedByUid != user.Uid) return Forbid();
 
         req.Cancel();
         await db.SaveChangesAsync(ct);
         return NoContent();
     }
 
-    // === DTO de criação pelo staff ===
+    // === Aprovar pedido (agora pelo CLIENTE/Admin) — RoomId vem do pedido ===
+    // POST /api/v1/class-requests/{id}/approve
+    [HttpPost("{id:guid}/approve")]
+    public async Task<IActionResult> Approve(Guid id, [FromBody] ApproveClassRequest? _ /* vazio */, CancellationToken ct)
+    {
+        // 1) Carregar pedido
+        var req = await db.ClassRequests.FirstOrDefaultAsync(r => r.Id == id, ct);
+        if (req is null) return NotFound();
+
+        // 2) Autorizar: Admin OU Cliente dono do pedido
+        var isAdmin = await user.IsInRoleAsync(RoleName.Admin, ct);
+        if (!isAdmin)
+        {
+            var client = await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.FirebaseUid == user.Uid, ct);
+            if (client is null || client.Id != req.ClientId) return Forbid();
+        }
+
+        // 3) Estado correto
+        if (req.Status != ClassRequestStatus.Pending)
+            return Problem(statusCode: 409, title: "Pedido inválido", detail: "Só pedidos pendentes podem ser aprovados.");
+
+        // 4) Revalidar conflitos (por Staff e por Room)
+        var bStart = req.ProposedStartUtc;      // já em UTC no domínio
+        var bDur   = req.DurationMinutes;
+        var staffId = req.StaffId;
+        var roomId  = req.RoomId;
+
+        // Staff
+        var conflictPendingStaff = await db.ClassRequests
+            .Where(c => c.Id != req.Id && c.StaffId == staffId && c.Status == ClassRequestStatus.Pending)
+            .AnyAsync(c =>
+                EF.Functions.DateDiffMinute(c.ProposedStartUtc, bStart) < c.DurationMinutes &&
+                EF.Functions.DateDiffMinute(bStart, c.ProposedStartUtc) < bDur,
+                ct);
+        if (conflictPendingStaff)
+            return Problem(statusCode: 409, title: "Conflito de agenda",
+                detail: "Já existe um pedido pendente para este staff no mesmo horário.");
+
+        var conflictClassesStaff = await db.Classes
+            .Where(k => k.StaffId == staffId && k.Status == ClassStatus.Scheduled)
+            .AnyAsync(k =>
+                EF.Functions.DateDiffMinute(k.StartUtc, bStart) < k.DurationMinutes &&
+                EF.Functions.DateDiffMinute(bStart, k.StartUtc) < bDur,
+                ct);
+        if (conflictClassesStaff)
+            return Problem(statusCode: 409, title: "Conflito de agenda",
+                detail: "Já existe uma aula agendada para este staff no mesmo horário.");
+
+        // Room
+        var conflictPendingRoom = await db.ClassRequests
+            .Where(c => c.Id != req.Id && c.RoomId == roomId && c.Status == ClassRequestStatus.Pending)
+            .AnyAsync(c =>
+                EF.Functions.DateDiffMinute(c.ProposedStartUtc, bStart) < c.DurationMinutes &&
+                EF.Functions.DateDiffMinute(bStart, c.ProposedStartUtc) < bDur,
+                ct);
+        if (conflictPendingRoom)
+            return Problem(statusCode: 409, title: "Conflito de agenda",
+                detail: "Já existe um pedido pendente para esta sala no mesmo horário.");
+
+        var conflictClassesRoom = await db.Classes
+            .Where(k => k.RoomId == roomId && k.Status == ClassStatus.Scheduled)
+            .AnyAsync(k =>
+                EF.Functions.DateDiffMinute(k.StartUtc, bStart) < k.DurationMinutes &&
+                EF.Functions.DateDiffMinute(bStart, k.StartUtc) < bDur,
+                ct);
+        if (conflictClassesRoom)
+            return Problem(statusCode: 409, title: "Conflito de agenda",
+                detail: "Já existe uma aula agendada para esta sala no mesmo horário.");
+
+        // 5) Criar aula (Scheduled) e marcar request como Approved
+        var klass = new Class(
+            clientId: req.ClientId,
+            staffId:  req.StaffId,
+            roomId:   req.RoomId,
+            startUtc: bStart,
+            durationMinutes: bDur,
+            createdByUid: user.Uid!,
+            linkedRequestId: req.Id);
+
+        db.Classes.Add(klass);
+        req.Approve();
+
+        await db.SaveChangesAsync(ct);
+
+        // 6) Resposta com pedido aprovado + resumo da aula criada
+        var response = new ClassRequestApprovedResponse(
+            RequestId: req.Id,
+            ClientId: req.ClientId,
+            StaffId: req.StaffId,
+            ProposedStartUtc: req.ProposedStartUtc,
+            DurationMinutes: req.DurationMinutes,
+            Notes: req.Notes,
+            Status: (int)req.Status,
+            CreatedByUid: req.CreatedByUid,
+            CreatedAtUtc: req.CreatedAtUtc,
+            ClassId: klass.Id,
+            ClassStartUtc: klass.StartUtc,
+            ClassDurationMinutes: klass.DurationMinutes,
+            ClassRoomId: klass.RoomId,
+            ClassStatus: (int)klass.Status
+        );
+
+        return Ok(response);
+    }
+
+    // === Rejeitar/Cancelar pelo CLIENTE (ou Admin) enquanto Pending ===
+    // POST /api/v1/class-requests/{id}/reject
+    [HttpPost("{id:guid}/reject")]
+    public async Task<IActionResult> Reject(Guid id, CancellationToken ct)
+    {
+        var req = await db.ClassRequests.FirstOrDefaultAsync(r => r.Id == id, ct);
+        if (req is null) return NotFound();
+
+        // Autorizar: Admin OU Cliente dono
+        var isAdmin = await user.IsInRoleAsync(RoleName.Admin, ct);
+        if (!isAdmin)
+        {
+            var client = await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.FirebaseUid == user.Uid, ct);
+            if (client is null || client.Id != req.ClientId) return Forbid();
+        }
+
+        if (req.Status != ClassRequestStatus.Pending)
+            return Problem(statusCode: 409, title: "Pedido inválido", detail: "Só pedidos pendentes podem ser rejeitados.");
+
+        req.Cancel();
+        await db.SaveChangesAsync(ct);
+
+        return Ok(new ClassRequestResponse(
+            req.Id, req.ClientId, req.StaffId, req.ProposedStartUtc, req.DurationMinutes,
+            req.Notes, (int)req.Status, req.CreatedByUid, req.CreatedAtUtc));
+    }
+
+    // === DTO de criação pelo staff (AGORA com RoomId obrigatório) ===
     public record CreateClassRequestByStaff(
         Guid?     ClientId,
         string?   ClientEmail,
         string?   ClientUid,
         DateTime  ProposedStartUtc,
         int       DurationMinutes,
+        Guid      RoomId,
         string?   Notes
     );
 
