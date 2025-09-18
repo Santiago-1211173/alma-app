@@ -24,6 +24,10 @@ public sealed class StaffConfiguration : IEntityTypeConfiguration<Staff>
 
         b.Property(x => x.CreatedAtUtc).HasDefaultValueSql("GETUTCDATE()").IsRequired();
         b.Property(x => x.RowVersion).IsRowVersion();
+        b.Property(s => s.FirebaseUid).HasMaxLength(128);
+        b.HasIndex(s => s.FirebaseUid)
+               .IsUnique()
+               .HasFilter("[FirebaseUid] IS NOT NULL");
 
         // Unicidades pedidas pelo RFP
         b.HasIndex(x => x.Email).IsUnique();

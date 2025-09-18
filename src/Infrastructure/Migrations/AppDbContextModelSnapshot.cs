@@ -22,6 +22,31 @@ namespace AlmaApp.Infrastructure.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
+            modelBuilder.Entity("AlmaApp.Domain.Auth.RoleAssignment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("FirebaseUid")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<int>("Role")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FirebaseUid", "Role")
+                        .IsUnique();
+
+                    b.ToTable("RoleAssignments", (string)null);
+                });
+
             modelBuilder.Entity("AlmaApp.Domain.ClassRequests.ClassRequest", b =>
                 {
                     b.Property<Guid>("Id")
@@ -152,6 +177,10 @@ namespace AlmaApp.Infrastructure.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<string>("FirebaseUid")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
                     b.Property<string>("FirstName")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -174,6 +203,10 @@ namespace AlmaApp.Infrastructure.Migrations
 
                     b.HasIndex("Email")
                         .IsUnique();
+
+                    b.HasIndex("FirebaseUid")
+                        .IsUnique()
+                        .HasFilter("[FirebaseUid] IS NOT NULL");
 
                     b.HasIndex("Phone")
                         .IsUnique();
@@ -238,6 +271,10 @@ namespace AlmaApp.Infrastructure.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<string>("FirebaseUid")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
                     b.Property<string>("FirstName")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -272,6 +309,10 @@ namespace AlmaApp.Infrastructure.Migrations
 
                     b.HasIndex("Email")
                         .IsUnique();
+
+                    b.HasIndex("FirebaseUid")
+                        .IsUnique()
+                        .HasFilter("[FirebaseUid] IS NOT NULL");
 
                     b.HasIndex("Phone")
                         .IsUnique();

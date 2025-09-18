@@ -19,6 +19,10 @@ public sealed class ClientConfiguration : IEntityTypeConfiguration<Client>
         e.Property(x => x.CitizenCardNumber).HasMaxLength(20).IsRequired();
         e.Property(x => x.Email).HasMaxLength(200).IsRequired();
         e.Property(x => x.Phone).HasMaxLength(30).IsRequired();
+        e.Property(c => c.FirebaseUid).HasMaxLength(128);
+        e.HasIndex(c => c.FirebaseUid)
+               .IsUnique()
+               .HasFilter("[FirebaseUid] IS NOT NULL");
 
         // ÚNICOS (sem duplicar)
         e.HasIndex(x => x.CitizenCardNumber).IsUnique();

@@ -18,10 +18,22 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> opts) : DbContex
     public DbSet<Room>  Rooms => Set<Room>();
     public DbSet<ClassRequest> ClassRequests => Set<ClassRequest>();
     public DbSet<Class> Classes => Set<Class>();
+    public DbSet<Domain.Auth.RoleAssignment> RoleAssignments => Set<Domain.Auth.RoleAssignment>();
+
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         // Aplica todas as IEntityTypeConfiguration<> deste assembly
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
+        // OnModelCreating
+        modelBuilder.Entity<Client>()
+            .HasIndex(c => c.FirebaseUid)
+            .IsUnique()
+            .HasFilter("[FirebaseUid] IS NOT NULL");
+
+        modelBuilder.Entity<Staff>()
+            .HasIndex(s => s.FirebaseUid)
+            .IsUnique()
+            .HasFilter("[FirebaseUid] IS NOT NULL");
     }
 }

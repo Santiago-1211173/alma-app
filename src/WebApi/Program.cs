@@ -2,40 +2,23 @@ using System.Security.Claims;
 using AlmaApp.Infrastructure;
 using AlmaApp.WebApi.Middleware;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Logging;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using AlmaApp.WebApi.Common.Auth;
+using AlmaApp.Domain.Auth;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // -------------------------
 // 1) SERVICES (antes do Build)
 // -------------------------
-// Necessário para aceder ao HttpContext (e.g. obter user id do token)
+
+// HttpContext (necessário para IUserContext)
 builder.Services.AddHttpContextAccessor();
-
-
-// Policies
-builder.Services.AddAuthorization(opts =>
-{
-    opts.AddPolicy("EmailVerified", p => p.RequireClaim("email_verified", "true"));
-    // papéis principais
-    opts.AddPolicy("AdminOnly",
-        p => p.RequireClaim("role", "admin", "Admin"));
-
-    opts.AddPolicy("StaffOrAdmin",
-        p => p.RequireClaim("role", "staff", "admin", "Staff", "Admin"));
-
-    opts.AddPolicy("ClientOnly",
-        p => p.RequireClaim("role", "client", "Client"));
-
-    // exemplo: papel + email verificado
-    opts.AddPolicy("StaffOrAdminVerified", p =>
-        p.RequireClaim("email_verified", "true", "True", "1")
-         .RequireClaim("role", "staff", "admin", "Staff", "Admin"));
-});
 
 // EF Core (SQL Server)
 var cs = builder.Configuration.GetConnectionString("DefaultConnection")
@@ -56,6 +39,27 @@ var projectId = builder.Configuration["Firebase:ProjectId"]
     ?? throw new InvalidOperationException("Firebase:ProjectId não configurado. Define em appsettings.Development.json.");
 var authority = $"https://securetoken.google.com/{projectId}";
 
+// ---- RBAC / UserContext & Authorization ----
+builder.Services.AddScoped<IUserContext, UserContext>();
+builder.Services.AddScoped<IAuthorizationHandler, RoleAuthorizationHandler>();       // was Singleton -> Scoped
+builder.Services.AddScoped<IAuthorizationHandler, RolesAnyAuthorizationHandler>();   // was Singleton -> Scoped
+
+builder.Services.AddAuthorization(opt =>
+{
+    // do token Firebase
+    opt.AddPolicy("EmailVerified", p =>
+        p.RequireClaim("email_verified", "true", "True", "1"));
+
+    // da BD (RoleAssignments) via IUserContext
+    opt.AddPolicy("Admin",  p => p.Requirements.Add(new RoleRequirement(RoleName.Admin)));
+    opt.AddPolicy("Staff",  p => p.Requirements.Add(new RoleRequirement(RoleName.Staff)));
+    opt.AddPolicy("Client", p => p.Requirements.Add(new RoleRequirement(RoleName.Client)));
+
+    // OR entre roles
+    opt.AddPolicy("AdminOrStaff",
+        p => p.Requirements.Add(new RolesAnyRequirement(RoleName.Admin, RoleName.Staff)));
+});
+
 // Logs detalhados de validação (DEV)
 IdentityModelEventSource.ShowPII = true;
 
@@ -75,7 +79,7 @@ builder.Services
             ValidateLifetime = true,
             ClockSkew = TimeSpan.FromMinutes(2)
         };
-        o.IncludeErrorDetails = true; // motivo no header WWW-Authenticate (DEV)
+        o.IncludeErrorDetails = true; // detalhes no header WWW-Authenticate (DEV)
     });
 
 // Controllers + Swagger
@@ -89,7 +93,7 @@ builder.Services.AddSwaggerGen(c =>
     var securityScheme = new OpenApiSecurityScheme
     {
         Name = "Authorization",
-        Description = "eyJhbGciOiJSUzI1NiIsImtpZCI6IjUwMDZlMjc5MTVhMTcwYWIyNmIxZWUzYjgxZDExNjU0MmYxMjRmMjAiLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL3NlY3VyZXRva2VuLmdvb2dsZS5jb20vYWxtYWFwcC1hdXRoIiwiYXVkIjoiYWxtYWFwcC1hdXRoIiwiYXV0aF90aW1lIjoxNzU3OTQ0ODQ3LCJ1c2VyX2lkIjoiT3VIaWxRNWlQNGY3cFR3Z1I4Y3FybXVJSVVyMiIsInN1YiI6Ik91SGlsUTVpUDRmN3BUd2dSOGNxcm11SUlVcjIiLCJpYXQiOjE3NTc5NDQ4NDcsImV4cCI6MTc1Nzk0ODQ0NywiZW1haWwiOiJzYW50LmZyZTIxQGdtYWlsLmNvbSIsImVtYWlsX3ZlcmlmaWVkIjpmYWxzZSwiZmlyZWJhc2UiOnsiaWRlbnRpdGllcyI6eyJlbWFpbCI6WyJzYW50LmZyZTIxQGdtYWlsLmNvbSJdfSwic2lnbl9pbl9wcm92aWRlciI6InBhc3N3b3JkIn19.c8RmJj3_uC4mn2MVwdbGVsiJVvOT0lNqwpTKAvL6FAmSLCfjCFhFrOECyJcW7nVOz2vswgb9vl7pMPw0bc-bwz3qlZWkaHPUrlRfSPjRarJvLKveVQPtRrfAqgKvGp0v6jLtPO6RQ5jpnEzSprsRUo5KTf55XwNMZw9cJArFhX5wThiZ7H83xj3lnTjWl9nDpmnKZHdJcmaOJVNiSrscfrLFytb5BudckY5eEahQzdItMyZDdeqBXlcqwujZct3nsWDZATphfIQvtoZqo3HnLjP_VoINfqOETu60Fg8ndcRNz1D9diMim9OnP8PpFCHFr-5n7KzNN1c04sRiD1v3_A",
+        Description = "Cole aqui o Firebase ID token (sem 'Bearer ')",
         In = ParameterLocation.Header,
         Type = SecuritySchemeType.Http,
         Scheme = "bearer",
@@ -99,7 +103,7 @@ builder.Services.AddSwaggerGen(c =>
     c.AddSecurityDefinition("Bearer", securityScheme);
     c.AddSecurityRequirement(new OpenApiSecurityRequirement { { securityScheme, Array.Empty<string>() } });
 
-    // --- ajustes para evitar 500 ao gerar swagger.json ---
+    // --- tipos 'novos' para o Swagger ---
     c.MapType<DateOnly>(() => new OpenApiSchema { Type = "string", Format = "date" });
     c.MapType<TimeOnly>(() => new OpenApiSchema { Type = "string", Format = "time" });
     c.CustomSchemaIds(t => t.FullName!.Replace('+', '.'));
@@ -120,7 +124,7 @@ builder.Logging.AddFilter("Microsoft.AspNetCore.Authentication", LogLevel.Debug)
 builder.Logging.AddFilter("Microsoft.IdentityModel", LogLevel.Debug);
 
 // -------------------------
-// Helper local: garantir BD + migrações
+// Helpers locais
 // -------------------------
 async Task EnsureDatabaseExistsAndMigrateAsync(WebApplication app)
 {
@@ -156,6 +160,32 @@ async Task EnsureDatabaseExistsAndMigrateAsync(WebApplication app)
     await db.Database.MigrateAsync();
 }
 
+// Semeia o Admin configurado em Seed:AdminFirebaseUid
+static async Task EnsureSeedAdminAsync(WebApplication app)
+{
+    using var scope = app.Services.CreateScope();
+    var cfg = scope.ServiceProvider.GetRequiredService<IConfiguration>();
+    var db  = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+    var uid = cfg["Seed:AdminFirebaseUid"];
+    if (string.IsNullOrWhiteSpace(uid))
+        return; // nada a fazer
+
+    var hasAdmin = await db.RoleAssignments
+        .AnyAsync(r => r.FirebaseUid == uid && r.Role == RoleName.Admin);
+
+    if (!hasAdmin)
+    {
+        db.RoleAssignments.Add(new RoleAssignment(uid, RoleName.Admin));
+        await db.SaveChangesAsync();
+        Console.WriteLine($"[SEED] Atribuído role Admin ao UID '{uid}'.");
+    }
+    else
+    {
+        Console.WriteLine($"[SEED] UID '{uid}' já tem role Admin.");
+    }
+}
+
 // -------------------------
 // 2) BUILD
 // -------------------------
@@ -178,13 +208,13 @@ if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Docker") |
         c.RoutePrefix = "swagger";
     });
 
-    // Garantir BD também em dev/docker
     await EnsureDatabaseExistsAndMigrateAsync(app);
+    await EnsureSeedAdminAsync(app);   // <= seed do Admin em dev/docker/ci
 }
 else
 {
-    // Em outros ambientes, pelo menos garantir migrações
     await EnsureDatabaseExistsAndMigrateAsync(app);
+    await EnsureSeedAdminAsync(app);   // <= seed também noutros ambientes
 }
 
 // Em Docker normalmente só expões HTTP; evitar redirecionar para HTTPS
@@ -199,6 +229,13 @@ app.UseAuthorization();
 
 app.MapHealthChecks("/healthz");
 app.MapControllers();
+
+// Quem sou eu + roles da BD
+app.MapGet("/whoami", async (IUserContext user) =>
+{
+    var roles = await user.GetRolesAsync();
+    return Results.Ok(new { uid = user.Uid, roles });
+}).RequireAuthorization();
 
 // /me: devolve info básica do token autenticado
 app.MapGet("/me", (ClaimsPrincipal user) =>

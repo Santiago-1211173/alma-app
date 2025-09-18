@@ -7,12 +7,13 @@ using AlmaApp.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using AlmaApp.Domain.Staff;
 using AlmaApp.Domain.Rooms;
+using AlmaApp.Domain.Auth;
 
 namespace AlmaApp.WebApi;
 
 internal static class DevSeeder
 {
-    public static async Task SeedAsync(AppDbContext db)
+    public static async Task SeedAsync(AppDbContext db, IConfiguration cfg)
     {
         // Só semeia se estiver vazio
         if (await db.Clients.AnyAsync()) return;
@@ -45,6 +46,20 @@ internal static class DevSeeder
                 new Room("Sala A", 12, true),
                 new Room("Sala B", 8, true)
             );
+        }
+
+        var uid = cfg["Seed:AdminFirebaseUid"];
+        if (!string.IsNullOrWhiteSpace(uid))
+        {
+            var hasAdmin = await db.RoleAssignments
+                .AsNoTracking()
+                .AnyAsync(x => x.FirebaseUid == uid && x.Role == RoleName.Admin);
+
+            if (!hasAdmin)
+            {
+                db.RoleAssignments.Add(new RoleAssignment(uid, RoleName.Admin));
+                await db.SaveChangesAsync();
+            }
         }
 
         await db.AddRangeAsync(list);

@@ -8,6 +8,7 @@ public class Client
     public string Email { get; private set; } = default!;
     public string? CitizenCardNumber { get; private set; } = default!;
     public string? Phone { get; private set; }
+    public string? FirebaseUid { get; private set; }
     public DateOnly? BirthDate { get; private set; }
     public DateTime CreatedAtUtc { get; private set; } = DateTime.UtcNow;
 
@@ -33,15 +34,22 @@ public class Client
     {
         Id = id == default ? Guid.NewGuid() : id;
     }
-    
+
     public void Update(string firstName, string lastName, string email,
-                   string citizenCardNumber, string? phone, DateOnly? birthDate){
+                   string citizenCardNumber, string? phone, DateOnly? birthDate)
+    {
         FirstName = firstName;
-        LastName  = lastName;
-        Email     = email;
+        LastName = lastName;
+        Email = email;
         CitizenCardNumber = citizenCardNumber;
         Phone = phone;
         BirthDate = birthDate;
+    }
+    
+    public void LinkFirebase(string uid)
+    {
+        if (string.IsNullOrWhiteSpace(uid)) throw new ArgumentException(nameof(uid));
+        FirebaseUid = uid.Trim();
     }
 
 }
