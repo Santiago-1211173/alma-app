@@ -1,23 +1,24 @@
 using System;
-using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
+using System.Security.Claims;
 using AlmaApp.Domain.ClassRequests;
+using AlmaApp.Domain.Classes;
 using AlmaApp.Infrastructure;
 using AlmaApp.WebApi.Common;
+using AlmaApp.WebApi.Common.Auth;
 using AlmaApp.WebApi.Contracts.ClassRequests;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using System.Security.Claims;
-using AlmaApp.WebApi.Common.Auth;
 
 namespace AlmaApp.WebApi.Controllers;
 
 [Authorize] // policy EmailVerified opcional aqui
 [ApiController]
 [Route("api/v1/class-requests")]
-public sealed class ClassRequestsController(AppDbContext db, IHttpContextAccessor http) : ControllerBase
+public sealed class ClassRequestsController(AppDbContext db, IUserContext user, IHttpContextAccessor http) : ControllerBase
 {
     private string CurrentUid =>
         http.HttpContext?.User.FindFirst("user_id")?.Value
@@ -29,7 +30,8 @@ public sealed class ClassRequestsController(AppDbContext db, IHttpContextAccesso
     public async Task<ActionResult<PagedResult<ClassRequestListItemDto>>> Search(
         [FromQuery] Guid? clientId, [FromQuery] Guid? staffId,
         [FromQuery] DateTime? from, [FromQuery] DateTime? to,
-        [FromQuery] int? status, [FromQuery] int page = 1, [FromQuery] int pageSize = 10)
+        [FromQuery] int? status, [FromQuery] int page = 1, [FromQuery] int pageSize = 10,
+        CancellationToken ct = default)
     {
         page = page < 1 ? 1 : page;
         pageSize = pageSize < 1 ? 10 : (pageSize > 200 ? 200 : pageSize);
@@ -37,42 +39,56 @@ public sealed class ClassRequestsController(AppDbContext db, IHttpContextAccesso
         var q = db.ClassRequests.AsNoTracking();
 
         if (clientId is { } cid) q = q.Where(x => x.ClientId == cid);
-        if (staffId is { } sid) q = q.Where(x => x.StaffId == sid);
-        if (from is { } f) q = q.Where(x => x.ProposedStartUtc >= DateTime.SpecifyKind(f, DateTimeKind.Utc));
-        if (to is { } t) q = q.Where(x => x.ProposedStartUtc < DateTime.SpecifyKind(t, DateTimeKind.Utc));
-        if (status is { } st) q = q.Where(x => (int)x.Status == st);
+        if (staffId  is { } sid) q = q.Where(x => x.StaffId == sid);
+        if (from     is { } f)   q = q.Where(x => x.ProposedStartUtc >= DateTime.SpecifyKind(f, DateTimeKind.Utc));
+        if (to       is { } t)   q = q.Where(x => x.ProposedStartUtc <  DateTime.SpecifyKind(t, DateTimeKind.Utc));
+        if (status   is { } st)  q = q.Where(x => (int)x.Status == st);
 
-        var total = await q.CountAsync();
+        var total = await q.CountAsync(ct);
 
         var items = await q.OrderBy(x => x.ProposedStartUtc)
             .Skip((page - 1) * pageSize).Take(pageSize)
-            .Select(x => new ClassRequestListItemDto(x.Id, x.ClientId, x.StaffId, x.ProposedStartUtc, x.DurationMinutes, x.Notes, (int)x.Status))
-            .ToListAsync();
+            .Select(x => new ClassRequestListItemDto(
+                x.Id, x.ClientId, x.StaffId, x.ProposedStartUtc, x.DurationMinutes, x.Notes, (int)x.Status))
+            .ToListAsync(ct);
 
         return Ok(PagedResult<ClassRequestListItemDto>.Create(items, page, pageSize, total));
     }
 
     [HttpGet("{id:guid}")]
-    public async Task<IActionResult> GetById(Guid id)
+    public async Task<IActionResult> GetById(Guid id, CancellationToken ct = default)
     {
-        var x = await db.ClassRequests.AsNoTracking().FirstOrDefaultAsync(c => c.Id == id);
+        var x = await db.ClassRequests.AsNoTracking()
+            .FirstOrDefaultAsync(c => c.Id == id, ct);
+
         if (x is null) return NotFound();
-        return Ok(new ClassRequestResponse(x.Id, x.ClientId, x.StaffId, x.ProposedStartUtc, x.DurationMinutes, x.Notes, (int)x.Status, x.CreatedByUid, x.CreatedAtUtc));
+
+        return Ok(new ClassRequestResponse(
+            x.Id, x.ClientId, x.StaffId, x.ProposedStartUtc, x.DurationMinutes, x.Notes,
+            (int)x.Status, x.CreatedByUid, x.CreatedAtUtc));
     }
 
     // POST /api/v1/class-requests  (STAFF cria pedido para um CLIENTE)
     [HttpPost]
-    [Authorize(Policy = "Staff, Admin" )]
+    [Authorize(Policy = "Staff")]
     public async Task<IActionResult> CreateForClient(
         [FromBody] CreateClassRequestByStaff body,
-        [FromServices] AppDbContext db,
-        [FromServices] IUserContext user,
         CancellationToken ct)
     {
-        // 1) staffId a partir do token
-        var staffId = await user.RequireStaffIdAsync(db, ct);
+        // 1) Garantir que o utilizador está mapeado a um Staff (UID -> Staff.FirebaseUid)
+        var uid = user.Uid;
+        if (string.IsNullOrWhiteSpace(uid)) return Forbid();
 
-        // 2) clientId a partir do corpo
+        var staff = await db.Staff
+            .AsNoTracking()
+            .FirstOrDefaultAsync(s => s.FirebaseUid == uid, ct);
+
+        if (staff is null)
+            return Forbid(); // tem role Staff no token mas não está mapeado na BD
+
+        var staffId = staff.Id;
+
+        // 2) Resolver e validar o ClientId (existência obrigatória)
         Guid clientId;
         try
         {
@@ -83,36 +99,53 @@ public sealed class ClassRequestsController(AppDbContext db, IHttpContextAccesso
             return BadRequest(new { detail = ex.Message });
         }
 
-        // 3) validações simples
+        var clientExists = await db.Clients.AnyAsync(c => c.Id == clientId, ct);
+        if (!clientExists)
+            return BadRequest(new { detail = "ClientId inválido ou inexistente." });
+
+        // 3) Validações de negócio (duração + data futura) e normalização para UTC
         if (body.DurationMinutes < 15 || body.DurationMinutes > 180)
             return BadRequest(new { detail = "durationMinutes deve estar entre 15 e 180." });
 
-        // 4) conflito de agenda (100% traduzível p/ SQL)
         var bStart = DateTime.SpecifyKind(body.ProposedStartUtc, DateTimeKind.Utc);
-        var bEnd   = bStart.AddMinutes(body.DurationMinutes);
+        var bDur   = body.DurationMinutes;
 
-        var hasConflict = await db.ClassRequests
-            .Where(c => c.Status == AlmaApp.Domain.ClassRequests.ClassRequestStatus.Pending
-                    && c.StaffId == staffId
-                    && c.ProposedStartUtc < bEnd) // a outra aula começa antes do fim da nova
+        if (bStart <= DateTime.UtcNow)
+            return Problem(statusCode: 400, title: "Data inválida",
+                           detail: "proposedStartUtc deve ser no futuro (UTC).");
+
+        // 4) Conflitos: Pedidos pendentes do mesmo Staff (100% traduzível p/ SQL)
+        var conflictPending = await db.ClassRequests
+            .Where(c => c.StaffId == staffId && c.Status == ClassRequestStatus.Pending)
             .AnyAsync(c =>
-                // minutos entre o início da outra aula e o início da nova
-                // têm de ser < duração da outra aula para haver sobreposição
-                EF.Functions.DateDiffMinute(c.ProposedStartUtc, bStart) < c.DurationMinutes,
+                EF.Functions.DateDiffMinute(c.ProposedStartUtc, bStart) < c.DurationMinutes &&
+                EF.Functions.DateDiffMinute(bStart, c.ProposedStartUtc) < bDur,
                 ct);
 
-        if (hasConflict)
+        if (conflictPending)
             return Problem(statusCode: 409, title: "Conflito de agenda",
                 detail: "Já existe um pedido pendente para este staff no mesmo horário.");
 
-        // 5) criar pedido
+        // 5) Conflitos: Aulas agendadas do mesmo Staff (100% traduzível p/ SQL)
+        var conflictClasses = await db.Classes
+            .Where(k => k.StaffId == staffId && k.Status == ClassStatus.Scheduled)
+            .AnyAsync(k =>
+                EF.Functions.DateDiffMinute(k.StartUtc, bStart) < k.DurationMinutes &&
+                EF.Functions.DateDiffMinute(bStart, k.StartUtc) < bDur,
+                ct);
+
+        if (conflictClasses)
+            return Problem(statusCode: 409, title: "Conflito de agenda",
+                detail: "Já existe uma aula agendada para este staff no mesmo horário.");
+
+        // 6) Criar o pedido (Pending)
         var req = new AlmaApp.Domain.ClassRequests.ClassRequest(
             clientId: clientId,
             staffId:  staffId,
             proposedStartUtc: bStart,
-            durationMinutes:  body.DurationMinutes,
+            durationMinutes:  bDur,
             notes: body.Notes,
-            createdByUid: user.Uid!);
+            createdByUid: uid!);
 
         db.ClassRequests.Add(req);
         await db.SaveChangesAsync(ct);
@@ -122,12 +155,17 @@ public sealed class ClassRequestsController(AppDbContext db, IHttpContextAccesso
 
     // GET /api/v1/me/class-requests  (Cliente vê os seus pedidos)
     [HttpGet("me/client")]
-    [Authorize(Policy = "Client, Admin")]
-    public async Task<IActionResult> MyClientRequests(AppDbContext db, IUserContext user, CancellationToken ct)
+    [Authorize(Policy = "Client")]
+    public async Task<IActionResult> MyClientRequests(CancellationToken ct)
     {
-        var clientId = await user.RequireClientIdAsync(db, ct);
+        var client = await db.Clients
+            .AsNoTracking()
+            .FirstOrDefaultAsync(c => c.FirebaseUid == user.Uid, ct);
+
+        if (client is null) return Forbid();
+
         var items = await db.ClassRequests.AsNoTracking()
-            .Where(c => c.ClientId == clientId)
+            .Where(c => c.ClientId == client.Id)
             .OrderByDescending(c => c.ProposedStartUtc)
             .Select(c => new {
                 c.Id, c.StaffId, c.ProposedStartUtc, c.DurationMinutes, c.Status, c.Notes
@@ -137,66 +175,83 @@ public sealed class ClassRequestsController(AppDbContext db, IHttpContextAccesso
         return Ok(items);
     }
 
-
     [HttpPut("{id:guid}")]
-    public async Task<IActionResult> Update(Guid id, [FromBody] UpdateClassRequest body)
+    public async Task<IActionResult> Update(Guid id, [FromBody] UpdateClassRequest body, CancellationToken ct)
     {
         if (!ModelState.IsValid) return ValidationProblem(ModelState);
 
-        var req = await db.ClassRequests.FirstOrDefaultAsync(r => r.Id == id);
+        var req = await db.ClassRequests.FirstOrDefaultAsync(r => r.Id == id, ct);
         if (req is null) return NotFound();
-        if (req.Status != ClassRequestStatus.Pending) return Problem("Só pedidos pendentes podem ser editados.", statusCode: 409);
-        if (req.CreatedByUid != CurrentUid) return Forbid();
+        if (req.Status != ClassRequestStatus.Pending)
+            return Problem("Só pedidos pendentes podem ser editados.", statusCode: 409);
+        if (req.CreatedByUid != user.Uid) return Forbid();
+
+        // normalizar e validar duração
+        if (body.DurationMinutes < 15 || body.DurationMinutes > 180)
+            return BadRequest(new { detail = "durationMinutes deve estar entre 15 e 180." });
 
         var startUtc = DateTime.SpecifyKind(body.ProposedStartUtc, DateTimeKind.Utc);
-        var endUtc = startUtc.AddMinutes(body.DurationMinutes);
+        if (startUtc <= DateTime.UtcNow)
+            return Problem(statusCode: 400, title: "Data inválida",
+                           detail: "proposedStartUtc deve ser no futuro (UTC).");
 
+        var bDur = body.DurationMinutes;
+
+        // overlap só com PENDENTES de outro registo, para o mesmo Staff
         var overlap = await db.ClassRequests
-        .Where(r => r.Id != id &&
-                    r.Status == ClassRequestStatus.Pending &&
-                    r.StaffId == body.StaffId)
-        .AnyAsync(r =>
-            r.ProposedStartUtc < endUtc &&
-            startUtc < r.ProposedStartUtc.AddMinutes(r.DurationMinutes)
-        );
+            .Where(r => r.Id != id &&
+                        r.Status == ClassRequestStatus.Pending &&
+                        r.StaffId == body.StaffId)
+            .AnyAsync(r =>
+                EF.Functions.DateDiffMinute(r.ProposedStartUtc, startUtc) < r.DurationMinutes &&
+                EF.Functions.DateDiffMinute(startUtc, r.ProposedStartUtc) < bDur,
+                ct);
 
         if (overlap)
-            return Conflict(new ProblemDetails { Title = "Conflito de agenda", Detail = "Já existe um pedido pendente para este staff no mesmo horário." });
+            return Conflict(new ProblemDetails
+            {
+                Title = "Conflito de agenda",
+                Detail = "Já existe um pedido pendente para este staff no mesmo horário."
+            });
 
         req.Update(body.ClientId, body.StaffId, startUtc, body.DurationMinutes, body.Notes);
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(ct);
         return NoContent();
     }
 
     [HttpDelete("{id:guid}")]
-    public async Task<IActionResult> Delete(Guid id)
+    public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
     {
-        var req = await db.ClassRequests.FirstOrDefaultAsync(r => r.Id == id);
+        var req = await db.ClassRequests.FirstOrDefaultAsync(r => r.Id == id, ct);
         if (req is null) return NotFound();
-        if (req.Status != ClassRequestStatus.Pending) return Problem("Só pedidos pendentes podem ser cancelados.", statusCode: 409);
-        if (req.CreatedByUid != CurrentUid) return Forbid();
+        if (req.Status != ClassRequestStatus.Pending)
+            return Problem("Só pedidos pendentes podem ser cancelados.", statusCode: 409);
+        if (req.CreatedByUid != user.Uid) return Forbid();
 
         req.Cancel();
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(ct);
         return NoContent();
     }
 
+    // === DTO de criação pelo staff ===
     public record CreateClassRequestByStaff(
-        Guid? ClientId,
-        string? ClientEmail,
-        string? ClientUid,
-        DateTime ProposedStartUtc,
-        int DurationMinutes,
-        string? Notes
+        Guid?     ClientId,
+        string?   ClientEmail,
+        string?   ClientUid,
+        DateTime  ProposedStartUtc,
+        int       DurationMinutes,
+        string?   Notes
     );
-    
+
+    // === Resolver clientId a partir de um (e só um) identificador ===
     private static async Task<Guid> ResolveClientIdAsync(
         CreateClassRequestByStaff body,
         AppDbContext db,
         CancellationToken ct)
     {
         // garantir que só vem um identificador
-        var provided = new[] {
+        var provided = new[]
+        {
             body.ClientId is not null,
             !string.IsNullOrWhiteSpace(body.ClientEmail),
             !string.IsNullOrWhiteSpace(body.ClientUid)
@@ -205,7 +260,7 @@ public sealed class ClassRequestsController(AppDbContext db, IHttpContextAccesso
         if (provided != 1)
             throw new ArgumentException("Indica exatamente um de: clientId, clientEmail ou clientUid.");
 
-        if (body.ClientId is Guid id) return id;
+        if (body.ClientId is Guid idFromBody) return idFromBody;
 
         var query = db.Clients.AsNoTracking().Select(c => new { c.Id, c.Email, c.FirebaseUid });
 
@@ -223,6 +278,4 @@ public sealed class ClassRequestsController(AppDbContext db, IHttpContextAccesso
         if (foundUid is null) throw new ArgumentException("ClientUid não encontrado.");
         return foundUid.Id;
     }
-
-
 }
