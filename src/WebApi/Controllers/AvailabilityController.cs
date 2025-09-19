@@ -12,6 +12,8 @@ using AlmaApp.WebApi.Contracts.Availability;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using AlmaApp.Domain.ClassRequests;
+
 
 namespace AlmaApp.WebApi.Controllers;
 
@@ -54,7 +56,7 @@ public sealed class AvailabilityController(AppDbContext db, IUserContext user) :
 
     // GET /api/v1/availability/staff/{staffId}/rules
     [HttpGet("staff/{staffId:guid}/rules")]
-    [Authorize(Policy = "Staff, Admin")]
+    [Authorize(Policy = "Staff")]
     public async Task<IActionResult> ListRules(Guid staffId, CancellationToken ct)
     {
         var rows = await db.StaffAvailabilityRules.AsNoTracking()
@@ -73,7 +75,7 @@ public sealed class AvailabilityController(AppDbContext db, IUserContext user) :
 
     // POST /api/v1/availability/staff/{staffId}/rules
     [HttpPost("staff/{staffId:guid}/rules")]
-    [Authorize(Policy = "Staff, Admin")]
+    [Authorize(Policy = "Staff")]
     public async Task<IActionResult> CreateRule(Guid staffId, [FromBody] UpsertStaffAvailabilityRuleDto body, CancellationToken ct)
     {
         if (!await IsAdminAsync(ct))
@@ -113,7 +115,7 @@ public sealed class AvailabilityController(AppDbContext db, IUserContext user) :
 
     // PUT /api/v1/availability/staff/{staffId}/rules/{ruleId}
     [HttpPut("staff/{staffId:guid}/rules/{ruleId:guid}")]
-    [Authorize(Policy = "Staff, Admin")]
+    [Authorize(Policy = "Staff")]
     public async Task<IActionResult> UpdateRule(Guid staffId, Guid ruleId, [FromBody] UpsertStaffAvailabilityRuleDto body, CancellationToken ct)
     {
         if (!await IsAdminAsync(ct))
@@ -145,7 +147,7 @@ public sealed class AvailabilityController(AppDbContext db, IUserContext user) :
 
     // DELETE /api/v1/availability/staff/{staffId}/rules/{ruleId}
     [HttpDelete("staff/{staffId:guid}/rules/{ruleId:guid}")]
-    [Authorize(Policy = "Staff, Admin")]
+    [Authorize(Policy = "Staff")]
     public async Task<IActionResult> DeleteRule(Guid staffId, Guid ruleId, CancellationToken ct)
     {
         if (!await IsAdminAsync(ct))
@@ -181,7 +183,7 @@ public sealed class AvailabilityController(AppDbContext db, IUserContext user) :
 
     // POST /api/v1/availability/staff/{staffId}/time-off
     [HttpPost("staff/{staffId:guid}/time-off")]
-    [Authorize(Policy = "Staff, Admin")]
+    [Authorize(Policy = "Staff")]
     public async Task<IActionResult> CreateTimeOff(Guid staffId, [FromBody] UpsertStaffTimeOffDto body, CancellationToken ct)
     {
         if (!await IsAdminAsync(ct))
@@ -214,7 +216,7 @@ public sealed class AvailabilityController(AppDbContext db, IUserContext user) :
 
     // PUT /api/v1/availability/staff/{staffId}/time-off/{id}
     [HttpPut("staff/{staffId:guid}/time-off/{id:guid}")]
-    [Authorize(Policy = "Staff, Admin")]
+    [Authorize(Policy = "Staff")]
     public async Task<IActionResult> UpdateTimeOff(Guid staffId, Guid id, [FromBody] UpsertStaffTimeOffDto body, CancellationToken ct)
     {
         if (!await IsAdminAsync(ct))
@@ -243,7 +245,7 @@ public sealed class AvailabilityController(AppDbContext db, IUserContext user) :
 
     // DELETE /api/v1/availability/staff/{staffId}/time-off/{id}
     [HttpDelete("staff/{staffId:guid}/time-off/{id:guid}")]
-    [Authorize(Policy = "Staff, Admin")]
+    [Authorize(Policy = "Staff")]
     public async Task<IActionResult> DeleteTimeOff(Guid staffId, Guid id, CancellationToken ct)
     {
         if (!await IsAdminAsync(ct))
@@ -348,91 +350,80 @@ public sealed class AvailabilityController(AppDbContext db, IUserContext user) :
     [HttpPost("is-available")]
     public async Task<ActionResult<CheckAvailabilityResponse>> IsAvailable([FromBody] CheckAvailabilityRequest body, CancellationToken ct)
     {
-        if (body.DurationMinutes < 15 || body.DurationMinutes > 240)
-            return Problem(statusCode: 400, title: "Dados inválidos", detail: "durationMinutes deve estar entre 15 e 240.");
+        if (body.DurationMinutes <= 0)
+            return BadRequest(new { detail = "durationMinutes deve ser > 0." });
 
-        var start = EnsureUtc(body.StartUtc);
-        var end = start.AddMinutes(body.DurationMinutes);
+        var start = DateTime.SpecifyKind(body.StartUtc, DateTimeKind.Utc);
+        var end   = start.AddMinutes(body.DurationMinutes);
 
-        // —— STAFF: regras + folgas + conflitos
-        if (body.StaffId is Guid staffId)
+        // não suportamos slots que cruzam a meia-noite (ajusta se quiseres)
+        if (start.Date != end.Date)
+            return BadRequest(new { detail = "O intervalo não pode atravessar a meia-noite (UTC)." });
+
+        // -------- STAFF ----------
+        if (body.StaffId is Guid staffId && staffId != Guid.Empty)
         {
-            var dow = (int)start.DayOfWeek;
+            // 1) Regras semanais (whitelist). Se existirem, o slot tem de caber numa delas.
+            var day = (int)start.DayOfWeek;
+            var rules = await db.StaffAvailabilityRules.AsNoTracking()
+                .Where(r => r.StaffId == staffId && r.Active && r.DayOfWeek == day)
+                .Select(r => new { r.StartTimeUtc, r.EndTimeUtc }) // TimeSpan no SQL (time)
+                .ToListAsync(ct);
 
-            if (start.Date != end.Date)
-                return Ok(new CheckAvailabilityResponse(false, "Intervalo atravessa a meia-noite — não suportado para regras diárias."));
-
-            var startTod = TimeOnly.FromDateTime(start);
-            var endTod   = TimeOnly.FromDateTime(end);
-            var startSpan = startTod.ToTimeSpan();
-            var endSpan   = endTod.ToTimeSpan();
-
-            var hasAnyRules = await db.StaffAvailabilityRules
-                .AnyAsync(r => r.StaffId == staffId && r.Active, ct);
-
-            if (hasAnyRules)
+            if (rules.Count > 0)
             {
-                var fitsAnyRule = await db.StaffAvailabilityRules
-                    .Where(r => r.StaffId == staffId && r.Active && r.DayOfWeek == dow)
-                    .AnyAsync(r => r.StartTimeUtc <= startSpan && endSpan <= r.EndTimeUtc, ct);
-
-                if (!fitsAnyRule)
-                    return Ok(new CheckAvailabilityResponse(false, "Fora do horário de trabalho do staff."));
+                var sTod = start.TimeOfDay; // TimeSpan
+                var eTod = end.TimeOfDay;
+                var fitsAny = rules.Any(r => r.StartTimeUtc <= sTod && eTod <= r.EndTimeUtc);
+                if (!fitsAny)
+                    return Ok(new CheckAvailabilityResponse(false, "Fora das regras de disponibilidade do staff para esse dia."));
             }
 
-            var timeOff = await db.StaffTimeOffs
-                .Where(t => t.StaffId == staffId)
-                .AnyAsync(t => Overlaps(start, end, t.FromUtc, t.ToUtc), ct);
+            // 2) Time-off
+            var hasTimeOff = await db.StaffTimeOffs.AsNoTracking()
+                .Where(s => s.StaffId == staffId)
+                .AnyAsync(s => s.FromUtc < end && start < s.ToUtc, ct);
+            if (hasTimeOff)
+                return Ok(new CheckAvailabilityResponse(false, "Staff em ausência nesse período."));
 
-            if (timeOff)
-                return Ok(new CheckAvailabilityResponse(false, "Staff em ausência (time-off) nesse período."));
+            // 3) Aulas agendadas
+            var staffClassBusy = await db.Classes.AsNoTracking()
+                .Where(k => k.StaffId == staffId && k.Status == ClassStatus.Scheduled)
+                .AnyAsync(k => k.StartUtc < end && start < k.StartUtc.AddMinutes(k.DurationMinutes), ct);
+            if (staffClassBusy)
+                return Ok(new CheckAvailabilityResponse(false, "Staff ocupado com outra aula nesse período."));
 
-            var conflictClassStaff = await db.Classes
-                .Where(c => c.StaffId == staffId && c.Status == ClassStatus.Scheduled)
-                .AnyAsync(c =>
-                    EF.Functions.DateDiffMinute(c.StartUtc, start) < c.DurationMinutes &&
-                    EF.Functions.DateDiffMinute(start, c.StartUtc) < body.DurationMinutes, ct);
-
-            if (conflictClassStaff)
-                return Ok(new CheckAvailabilityResponse(false, "Staff já tem aula marcada nesse período."));
-
-            var conflictReqStaff = await db.ClassRequests
-                .Where(r => r.StaffId == staffId && r.Status == Domain.ClassRequests.ClassRequestStatus.Pending)
-                .AnyAsync(r =>
-                    EF.Functions.DateDiffMinute(r.ProposedStartUtc, start) < r.DurationMinutes &&
-                    EF.Functions.DateDiffMinute(start, r.ProposedStartUtc) < body.DurationMinutes, ct);
-
-            if (conflictReqStaff)
-                return Ok(new CheckAvailabilityResponse(false, "Existe pedido pendente para o staff nesse período."));
+            // 4) Pedidos pendentes
+            var staffReqBusy = await db.ClassRequests.AsNoTracking()
+                .Where(c => c.StaffId == staffId && c.Status == ClassRequestStatus.Pending)
+                .AnyAsync(c => c.ProposedStartUtc < end && start < c.ProposedStartUtc.AddMinutes(c.DurationMinutes), ct);
+            if (staffReqBusy)
+                return Ok(new CheckAvailabilityResponse(false, "Já existe um pedido pendente para o staff nesse período."));
         }
 
-        // —— ROOM: encerramentos + conflitos
-        if (body.RoomId is Guid roomId)
+        // -------- SALA ----------
+        if (body.RoomId is Guid roomId && roomId != Guid.Empty)
         {
-            var roomClosed = await db.RoomClosures
-                .Where(c => c.RoomId == roomId)
-                .AnyAsync(c => Overlaps(start, end, c.FromUtc, c.ToUtc), ct);
-
+            // 1) Encerramentos
+            var roomClosed = await db.RoomClosures.AsNoTracking()
+                .Where(r => r.RoomId == roomId)
+                .AnyAsync(r => r.FromUtc < end && start < r.ToUtc, ct);
             if (roomClosed)
                 return Ok(new CheckAvailabilityResponse(false, "Sala encerrada/indisponível nesse período."));
 
-            var conflictClassRoom = await db.Classes
-                .Where(c => c.RoomId == roomId && c.Status == ClassStatus.Scheduled)
-                .AnyAsync(c =>
-                    EF.Functions.DateDiffMinute(c.StartUtc, start) < c.DurationMinutes &&
-                    EF.Functions.DateDiffMinute(start, c.StartUtc) < body.DurationMinutes, ct);
+            // 2) Aulas agendadas
+            var roomClassBusy = await db.Classes.AsNoTracking()
+                .Where(k => k.RoomId == roomId && k.Status == ClassStatus.Scheduled)
+                .AnyAsync(k => k.StartUtc < end && start < k.StartUtc.AddMinutes(k.DurationMinutes), ct);
+            if (roomClassBusy)
+                return Ok(new CheckAvailabilityResponse(false, "Sala ocupada com outra aula nesse período."));
 
-            if (conflictClassRoom)
-                return Ok(new CheckAvailabilityResponse(false, "Sala ocupada por outra aula."));
-
-            var conflictReqRoom = await db.ClassRequests
-                .Where(r => r.RoomId == roomId && r.Status == Domain.ClassRequests.ClassRequestStatus.Pending)
-                .AnyAsync(r =>
-                    EF.Functions.DateDiffMinute(r.ProposedStartUtc, start) < r.DurationMinutes &&
-                    EF.Functions.DateDiffMinute(start, r.ProposedStartUtc) < body.DurationMinutes, ct);
-
-            if (conflictReqRoom)
-                return Ok(new CheckAvailabilityResponse(false, "Sala reservada por pedido pendente."));
+            // 3) Pedidos pendentes
+            var roomReqBusy = await db.ClassRequests.AsNoTracking()
+                .Where(c => c.RoomId == roomId && c.Status == ClassRequestStatus.Pending)
+                .AnyAsync(c => c.ProposedStartUtc < end && start < c.ProposedStartUtc.AddMinutes(c.DurationMinutes), ct);
+            if (roomReqBusy)
+                return Ok(new CheckAvailabilityResponse(false, "Já existe um pedido pendente que usa esta sala nesse período."));
         }
 
         return Ok(new CheckAvailabilityResponse(true, null));
