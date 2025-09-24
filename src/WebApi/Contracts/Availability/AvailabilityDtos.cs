@@ -52,13 +52,6 @@ public sealed record UpsertRoomClosureDto(
     string? Reason
 );
 
-// ===== Is Available =====
-public sealed record CheckAvailabilityRequest(
-    Guid? StaffId,
-    Guid? RoomId,
-    DateTime StartUtc,
-    int DurationMinutes
-);
 
 public sealed record CheckAvailabilityResponse(
     bool Available,
