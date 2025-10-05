@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using AlmaApp.Infrastructure;
 using AlmaApp.WebApi.Middleware;
+using AlmaApp.WebApi.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Data.SqlClient;
@@ -41,6 +42,7 @@ var authority = $"https://securetoken.google.com/{projectId}";
 
 // ---- RBAC / UserContext & Authorization ----
 builder.Services.AddScoped<IUserContext, UserContext>();
+builder.Services.AddScoped<IActivitiesService, ActivitiesService>();
 builder.Services.AddScoped<IAuthorizationHandler, RoleAuthorizationHandler>();       // was Singleton -> Scoped
 builder.Services.AddScoped<IAuthorizationHandler, RolesAnyAuthorizationHandler>();   // was Singleton -> Scoped
 
