@@ -1,14 +1,11 @@
 using System;
-using System.Collections.Generic;
-using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
-using AlmaApp.Domain.Rooms;
-using AlmaApp.Infrastructure;
 using AlmaApp.WebApi.Common;
 using AlmaApp.WebApi.Contracts.Rooms;
+using AlmaApp.WebApi.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace AlmaApp.WebApi.Controllers;
 
@@ -17,77 +14,97 @@ namespace AlmaApp.WebApi.Controllers;
 [Route("api/v1/rooms")]
 public sealed class RoomsController : ControllerBase
 {
-    private readonly AppDbContext _db;
-    public RoomsController(AppDbContext db) => _db = db;
+    private readonly IRoomsService _rooms;
 
-    // GET /api/v1/rooms?q=&page=&pageSize=&onlyActive=
+    public RoomsController(IRoomsService rooms)
+        => _rooms = rooms;
+
     [HttpGet]
-    public async Task<ActionResult<PagedResult<RoomListItemDto>>> Search([FromQuery] string? q, [FromQuery] int page = 1, [FromQuery] int pageSize = 10, [FromQuery] bool? onlyActive = null)
+    public async Task<ActionResult<PagedResult<RoomListItemDto>>> Search(
+        [FromQuery] string? q,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 10,
+        [FromQuery] bool? onlyActive = null,
+        CancellationToken ct = default)
     {
-        page = page < 1 ? 1 : page;
-        pageSize = pageSize < 1 ? 10 : (pageSize > 200 ? 200 : pageSize);
-
-        var query = _db.Rooms.AsNoTracking();
-        if (!string.IsNullOrWhiteSpace(q))
+        var result = await _rooms.SearchAsync(q, page, pageSize, onlyActive, ct);
+        if (!result.Success)
         {
-            var term = q.Trim();
-            query = query.Where(r => EF.Functions.Like(r.Name, $"%{term}%"));
+            return MapError(result.Error!);
         }
-        if (onlyActive is true) query = query.Where(r => r.IsActive);
 
-        var total = await query.CountAsync();
-        var items = await query
-            .OrderBy(r => r.Name)
-            .Skip((page - 1) * pageSize).Take(pageSize)
-            .Select(r => new RoomListItemDto(r.Id, r.Name, r.Capacity, r.IsActive))
-            .ToListAsync();
-
-        return Ok(PagedResult<RoomListItemDto>.Create(items, page, pageSize, total));
+        return Ok(result.Value);
     }
 
     [HttpGet("{id:guid}")]
-    public async Task<IActionResult> GetById(Guid id)
+    public async Task<IActionResult> GetById(Guid id, CancellationToken ct)
     {
-        var r = await _db.Rooms.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id);
-        if (r is null) return NotFound();
-        var dto = new RoomResponse(r.Id, r.Name, r.Capacity, r.IsActive, r.CreatedAtUtc);
-        return Ok(dto);
+        var result = await _rooms.GetByIdAsync(id, ct);
+        if (!result.Success)
+        {
+            return MapError(result.Error!);
+        }
+
+        return Ok(result.Value);
     }
 
     [HttpPost]
-    public async Task<IActionResult> Create([FromBody] CreateRoomRequest body)
+    public async Task<IActionResult> Create([FromBody] CreateRoomRequest body, CancellationToken ct)
     {
-        if (!ModelState.IsValid) return ValidationProblem(ModelState);
+        if (!ModelState.IsValid)
+        {
+            return ValidationProblem(ModelState);
+        }
 
-        var r = new Room(body.Name, body.Capacity, body.IsActive);
-        _db.Rooms.Add(r);
-        await _db.SaveChangesAsync();
+        var result = await _rooms.CreateAsync(body, ct);
+        if (!result.Success)
+        {
+            return MapError(result.Error!);
+        }
 
-        var dto = new RoomResponse(r.Id, r.Name, r.Capacity, r.IsActive, r.CreatedAtUtc);
-        return CreatedAtAction(nameof(GetById), new { id = r.Id }, dto);
+        return CreatedAtAction(nameof(GetById), new { id = result.Value!.Id }, result.Value);
     }
 
     [HttpPut("{id:guid}")]
-    public async Task<IActionResult> Update(Guid id, [FromBody] UpdateRoomRequest body)
+    public async Task<IActionResult> Update(Guid id, [FromBody] UpdateRoomRequest body, CancellationToken ct)
     {
-        if (!ModelState.IsValid) return ValidationProblem(ModelState);
+        if (!ModelState.IsValid)
+        {
+            return ValidationProblem(ModelState);
+        }
 
-        var r = await _db.Rooms.FirstOrDefaultAsync(x => x.Id == id);
-        if (r is null) return NotFound();
+        var result = await _rooms.UpdateAsync(id, body, ct);
+        if (!result.Success)
+        {
+            return MapError(result.Error!);
+        }
 
-        r.Update(body.Name, body.Capacity, body.IsActive);
-        await _db.SaveChangesAsync();
         return NoContent();
     }
 
     [HttpDelete("{id:guid}")]
-    public async Task<IActionResult> Delete(Guid id)
+    public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
     {
-        var r = await _db.Rooms.FirstOrDefaultAsync(x => x.Id == id);
-        if (r is null) return NotFound();
+        var result = await _rooms.DeleteAsync(id, ct);
+        if (!result.Success)
+        {
+            return MapError(result.Error!);
+        }
 
-        _db.Rooms.Remove(r);
-        await _db.SaveChangesAsync();
         return NoContent();
+    }
+
+    private ActionResult MapError(ServiceError error)
+    {
+        var problem = error.ToProblemDetails();
+
+        return error.StatusCode switch
+        {
+            400 => BadRequest(problem),
+            401 => Unauthorized(problem),
+            404 => NotFound(problem),
+            409 => Conflict(problem),
+            _ => StatusCode(error.StatusCode, problem)
+        };
     }
 }

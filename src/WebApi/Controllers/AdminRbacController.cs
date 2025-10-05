@@ -1,129 +1,77 @@
 using System;
-using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using AlmaApp.Domain.Auth;
-using AlmaApp.Infrastructure;
+using AlmaApp.WebApi.Common;
+using AlmaApp.WebApi.Contracts.Auth;
+using AlmaApp.WebApi.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace AlmaApp.WebApi.Controllers;
 
 [Authorize(Policy = "Admin")]
 [ApiController]
 [Route("api/v1/rbac")]
-public class AdminRbacController(AppDbContext db) : ControllerBase
+public class AdminRbacController : ControllerBase
 {
-    // GET /api/v1/rbac/users/{uid}/roles
+    private readonly IAdminRbacService _rbac;
+
+    public AdminRbacController(IAdminRbacService rbac)
+        => _rbac = rbac;
+
     [HttpGet("users/{uid}/roles")]
-    public async Task<IActionResult> GetRoles(string uid)
+    public async Task<IActionResult> GetRoles(string uid, CancellationToken ct)
     {
-        var (ok, problem) = ValidateUid(uid);
-        if (!ok) return BadRequest(problem);
+        var result = await _rbac.GetRolesAsync(uid, ct);
+        if (!result.Success)
+        {
+            return MapError(result.Error!);
+        }
 
-        var roles = await db.RoleAssignments
-            .Where(r => r.FirebaseUid == uid.Trim())
-            .Select(r => r.Role)
-            .ToListAsync();
-
-        return Ok(new { userUid = uid.Trim(), roles });
+        return Ok(result.Value);
     }
 
-    public sealed record AssignRoleRequest(RoleName Role);
-
-    // POST /api/v1/rbac/users/{uid}/roles
     [HttpPost("users/{uid}/roles")]
-    public async Task<IActionResult> AssignRole(string uid, [FromBody] AssignRoleRequest body)
+    public async Task<IActionResult> AssignRole(string uid, [FromBody] AssignRoleRequest body, CancellationToken ct)
     {
-        var (ok, problem) = ValidateUid(uid);
-        if (!ok) return BadRequest(problem);
+        if (!ModelState.IsValid)
+        {
+            return ValidationProblem(ModelState);
+        }
 
-        uid = uid.Trim();
-
-        var exists = await db.RoleAssignments
-            .AnyAsync(r => r.FirebaseUid == uid && r.Role == body.Role);
-
-        if (exists)
-            return Conflict(new
-            {
-                title = "Conflict",
-                detail = "Role já atribuída a este utilizador."
-            });
-
-        // cria a atribuição
-        var entity = new RoleAssignment(uid, body.Role);
-        db.RoleAssignments.Add(entity);
-        await db.SaveChangesAsync();
+        var result = await _rbac.AssignRoleAsync(uid, body, ct);
+        if (!result.Success)
+        {
+            return MapError(result.Error!);
+        }
 
         return CreatedAtAction(nameof(GetRoles), new { uid }, null);
     }
 
-    // DELETE /api/v1/rbac/users/{uid}/roles/{role}
     [HttpDelete("users/{uid}/roles/{role}")]
-    public async Task<IActionResult> RemoveRole(string uid, RoleName role)
+    public async Task<IActionResult> RemoveRole(string uid, RoleName role, CancellationToken ct)
     {
-        var (ok, problem) = ValidateUid(uid);
-        if (!ok) return BadRequest(problem);
+        var result = await _rbac.RemoveRoleAsync(uid, role, ct);
+        if (!result.Success)
+        {
+            return MapError(result.Error!);
+        }
 
-        uid = uid.Trim();
-
-        var entity = await db.RoleAssignments
-            .FirstOrDefaultAsync(r => r.FirebaseUid == uid && r.Role == role);
-
-        if (entity is null) return NotFound();
-
-        db.RoleAssignments.Remove(entity);
-        await db.SaveChangesAsync();
         return NoContent();
     }
 
-    /// <summary>
-    /// Valida se a string recebida parece um Firebase UID (e não um JWT).
-    /// - obrigatório, sem espaços nos extremos;
-    /// - comprimento ≤ 128 (limite do Firebase/BD);
-    /// - não pode conter '.' (padrão característico de JWT: header.payload.signature);
-    /// - se contiver dois pontos ('.') ou começar por "eyJ" e tiver pontos → muito provavelmente é um JWT.
-    /// </summary>
-    private static (bool ok, object problem) ValidateUid(string? uid)
+    private ActionResult MapError(ServiceError error)
     {
-        if (string.IsNullOrWhiteSpace(uid))
+        var problem = error.ToProblemDetails();
+
+        return error.StatusCode switch
         {
-            return (false, new
-            {
-                type = "https://httpstatuses.com/400",
-                title = "Dados inválidos",
-                detail = "Parâmetro 'uid' é obrigatório.",
-                status = 400
-            });
-        }
-
-        var trimmed = uid.Trim();
-
-        if (trimmed.Length > 128)
-        {
-            return (false, new
-            {
-                type = "https://httpstatuses.com/400",
-                title = "Dados inválidos",
-                detail = "O 'uid' excede o tamanho máximo (128). Verifica se não estás a enviar o token JWT inteiro. Usa o UID devolvido pelo endpoint /whoami.",
-                status = 400
-            });
-        }
-
-        // Sinais fortes de JWT
-        var dotCount = trimmed.Count(c => c == '.');
-        var looksLikeJwt = dotCount >= 2 || (trimmed.StartsWith("eyJ", StringComparison.Ordinal) && dotCount >= 1);
-
-        if (looksLikeJwt)
-        {
-            return (false, new
-            {
-                type = "https://httpstatuses.com/400",
-                title = "Dados inválidos",
-                detail = "Foi detetado um token JWT no lugar do Firebase UID. Usa o 'uid' devolvido por /whoami (não o token).",
-                status = 400
-            });
-        }
-
-        return (true, new { });
+            400 => BadRequest(problem),
+            401 => Unauthorized(problem),
+            404 => NotFound(problem),
+            409 => Conflict(problem),
+            _ => StatusCode(error.StatusCode, problem)
+        };
     }
 }

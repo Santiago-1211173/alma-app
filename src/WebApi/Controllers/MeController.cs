@@ -1,16 +1,10 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
-using System;
-using System.Linq;
-using System.Threading.Tasks;
-using AlmaApp.Infrastructure;
-using AlmaApp.WebApi.Common.Auth;
+using AlmaApp.WebApi.Common;
 using AlmaApp.WebApi.Contracts.Auth;
+using AlmaApp.WebApi.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace AlmaApp.WebApi.Controllers;
 
@@ -19,44 +13,34 @@ namespace AlmaApp.WebApi.Controllers;
 [Route("api/v1/me")]
 public sealed class MeController : ControllerBase
 {
-    private readonly AppDbContext _db;
-    private readonly IUserContext _user;
+    private readonly IMeService _me;
 
-    public MeController(AppDbContext db, IUserContext user)
-    {
-        _db = db;
-        _user = user;
-    }
+    public MeController(IMeService me)
+        => _me = me;
 
     [HttpGet]
-    public async Task<ActionResult<MeResponse>> Get()
+    public async Task<ActionResult<MeResponse>> Get(CancellationToken ct)
     {
-        // UID/Email/Verified a partir do contexto (Firebase JWT + DB)
-        var uid = _user.Uid ?? throw new InvalidOperationException("Missing user id.");
-        var email = _user.Email;
-        var emailVerified = _user.EmailVerified;
+        var result = await _me.GetAsync(ct);
+        if (!result.Success)
+        {
+            return MapError(result.Error!);
+        }
 
-        // Mapeamento para domínio
-        var clientId = await _db.Clients
-            .AsNoTracking()
-            .Where(c => c.FirebaseUid == uid)
-            .Select(c => (Guid?)c.Id)
-            .FirstOrDefaultAsync();
+        return Ok(result.Value);
+    }
 
-        var staffId = await _db.Staff
-            .AsNoTracking()
-            .Where(s => s.FirebaseUid == uid)
-            .Select(s => (Guid?)s.Id)
-            .FirstOrDefaultAsync();
+    private ActionResult MapError(ServiceError error)
+    {
+        var problem = error.ToProblemDetails();
 
-        // Roles atuais (tabela RoleAssignments)
-        var roles = await _db.RoleAssignments
-            .AsNoTracking()
-            .Where(r => r.FirebaseUid == uid)
-            .Select(r => r.Role) // se for enum, converte para string
-            .Select(r => r.ToString())
-            .ToArrayAsync();
-
-        return Ok(new MeResponse(uid, email, emailVerified, clientId, staffId, roles));
+        return error.StatusCode switch
+        {
+            400 => BadRequest(problem),
+            401 => Unauthorized(problem),
+            404 => NotFound(problem),
+            409 => Conflict(problem),
+            _ => StatusCode(error.StatusCode, problem)
+        };
     }
 }

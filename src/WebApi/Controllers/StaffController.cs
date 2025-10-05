@@ -1,14 +1,11 @@
 using System;
-using System.Collections.Generic;
-using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
-using AlmaApp.Domain.Staff;
-using AlmaApp.Infrastructure;
 using AlmaApp.WebApi.Common;
 using AlmaApp.WebApi.Contracts.Staff;
+using AlmaApp.WebApi.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace AlmaApp.WebApi.Controllers;
 
@@ -17,81 +14,96 @@ namespace AlmaApp.WebApi.Controllers;
 [Route("api/v1/staff")]
 public sealed class StaffController : ControllerBase
 {
-    private readonly AppDbContext _db;
-    public StaffController(AppDbContext db) => _db = db;
+    private readonly IStaffService _staff;
 
-    // GET /api/v1/staff?q=&page=&pageSize=
+    public StaffController(IStaffService staff)
+        => _staff = staff;
+
     [HttpGet]
-    public async Task<ActionResult<PagedResult<StaffListItemDto>>> Search([FromQuery] string? q, [FromQuery] int page = 1, [FromQuery] int pageSize = 10)
+    public async Task<ActionResult<PagedResult<StaffListItemDto>>> Search(
+        [FromQuery] string? q,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 10,
+        CancellationToken ct = default)
     {
-        page = page < 1 ? 1 : page;
-        pageSize = pageSize < 1 ? 10 : (pageSize > 200 ? 200 : pageSize);
-
-        var query = _db.Staff.AsNoTracking();
-        if (!string.IsNullOrWhiteSpace(q))
+        var result = await _staff.SearchAsync(q, page, pageSize, ct);
+        if (!result.Success)
         {
-            var term = q.Trim();
-            query = query.Where(s =>
-                EF.Functions.Like(s.FirstName, $"%{term}%") ||
-                EF.Functions.Like(s.LastName,  $"%{term}%") ||
-                EF.Functions.Like(s.Email,     $"%{term}%") ||
-                EF.Functions.Like(s.Phone,     $"%{term}%") ||
-                EF.Functions.Like(s.StaffNumber,$"%{term}%"));
+            return MapError(result.Error!);
         }
 
-        var total = await query.CountAsync();
-        var items = await query
-            .OrderBy(s => s.LastName).ThenBy(s => s.FirstName)
-            .Skip((page - 1) * pageSize).Take(pageSize)
-            .Select(s => new StaffListItemDto(s.Id, s.FirstName, s.LastName, s.Email, s.Phone, s.StaffNumber, s.Speciality))
-            .ToListAsync();
-
-        return Ok(PagedResult<StaffListItemDto>.Create(items, page, pageSize, total));
+        return Ok(result.Value);
     }
 
     [HttpGet("{id:guid}")]
-    public async Task<IActionResult> GetById(Guid id)
+    public async Task<IActionResult> GetById(Guid id, CancellationToken ct)
     {
-        var s = await _db.Staff.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id);
-        if (s is null) return NotFound();
-        var dto = new StaffResponse(s.Id, s.FirstName, s.LastName, s.Email, s.Phone, s.StaffNumber, s.Speciality, s.CreatedAtUtc);
-        return Ok(dto);
+        var result = await _staff.GetByIdAsync(id, ct);
+        if (!result.Success)
+        {
+            return MapError(result.Error!);
+        }
+
+        return Ok(result.Value);
     }
 
     [HttpPost]
-    public async Task<IActionResult> Create([FromBody] CreateStaffRequest body)
+    public async Task<IActionResult> Create([FromBody] CreateStaffRequest body, CancellationToken ct)
     {
-        if (!ModelState.IsValid) return ValidationProblem(ModelState);
+        if (!ModelState.IsValid)
+        {
+            return ValidationProblem(ModelState);
+        }
 
-        var s = new Staff(body.FirstName, body.LastName, body.Email, body.Phone, body.StaffNumber, body.Speciality);
-        _db.Staff.Add(s);
-        await _db.SaveChangesAsync();
+        var result = await _staff.CreateAsync(body, ct);
+        if (!result.Success)
+        {
+            return MapError(result.Error!);
+        }
 
-        var dto = new StaffResponse(s.Id, s.FirstName, s.LastName, s.Email, s.Phone, s.StaffNumber, s.Speciality, s.CreatedAtUtc);
-        return CreatedAtAction(nameof(GetById), new { id = s.Id }, dto);
+        return CreatedAtAction(nameof(GetById), new { id = result.Value!.Id }, result.Value);
     }
 
     [HttpPut("{id:guid}")]
-    public async Task<IActionResult> Update(Guid id, [FromBody] UpdateStaffRequest body)
+    public async Task<IActionResult> Update(Guid id, [FromBody] UpdateStaffRequest body, CancellationToken ct)
     {
-        if (!ModelState.IsValid) return ValidationProblem(ModelState);
+        if (!ModelState.IsValid)
+        {
+            return ValidationProblem(ModelState);
+        }
 
-        var s = await _db.Staff.FirstOrDefaultAsync(x => x.Id == id);
-        if (s is null) return NotFound();
+        var result = await _staff.UpdateAsync(id, body, ct);
+        if (!result.Success)
+        {
+            return MapError(result.Error!);
+        }
 
-        s.Update(body.FirstName, body.LastName, body.Email, body.Phone, body.StaffNumber, body.Speciality);
-        await _db.SaveChangesAsync();
         return NoContent();
     }
 
     [HttpDelete("{id:guid}")]
-    public async Task<IActionResult> Delete(Guid id)
+    public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
     {
-        var s = await _db.Staff.FirstOrDefaultAsync(x => x.Id == id);
-        if (s is null) return NotFound();
+        var result = await _staff.DeleteAsync(id, ct);
+        if (!result.Success)
+        {
+            return MapError(result.Error!);
+        }
 
-        _db.Staff.Remove(s);
-        await _db.SaveChangesAsync();
         return NoContent();
+    }
+
+    private ActionResult MapError(ServiceError error)
+    {
+        var problem = error.ToProblemDetails();
+
+        return error.StatusCode switch
+        {
+            400 => BadRequest(problem),
+            401 => Unauthorized(problem),
+            404 => NotFound(problem),
+            409 => Conflict(problem),
+            _ => StatusCode(error.StatusCode, problem)
+        };
     }
 }

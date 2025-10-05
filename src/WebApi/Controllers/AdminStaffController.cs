@@ -1,8 +1,11 @@
-using AlmaApp.Domain.Staff;
-using AlmaApp.Infrastructure;
+using System;
+using System.Threading;
+using System.Threading.Tasks;
+using AlmaApp.WebApi.Common;
+using AlmaApp.WebApi.Contracts.Staff;
+using AlmaApp.WebApi.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace AlmaApp.WebApi.Controllers;
 
@@ -11,84 +14,68 @@ namespace AlmaApp.WebApi.Controllers;
 [Route("admin/staff")]
 public class AdminStaffController : ControllerBase
 {
-    private readonly AppDbContext _db;
-    public AdminStaffController(AppDbContext db) => _db = db;
+    private readonly IAdminStaffService _staff;
 
-    // DTOs
-    public record CreateStaffRequest(
-        string FirstName,
-        string LastName,
-        string Email,
-        string Phone,
-        string StaffNumber,
-        string? Speciality
-    );
-
-    public record StaffDto(
-        Guid Id,
-        string FirstName,
-        string LastName,
-        string Email,
-        string Phone,
-        string StaffNumber,
-        string? Speciality,
-        string? FirebaseUid
-    );
-
-    public record LinkFirebaseRequest(string Uid);
+    public AdminStaffController(IAdminStaffService staff)
+        => _staff = staff;
 
     [HttpPost]
-    public async Task<ActionResult<StaffDto>> Create([FromBody] CreateStaffRequest body)
+    public async Task<ActionResult<AdminStaffDto>> Create([FromBody] CreateAdminStaffRequest body, CancellationToken ct)
     {
-        var s = new Staff(
-            firstName:   body.FirstName.Trim(),
-            lastName:    body.LastName.Trim(),
-            email:       body.Email.Trim().ToLowerInvariant(),
-            phone:       body.Phone.Trim(),
-            staffNumber: body.StaffNumber.Trim(),
-            speciality:  string.IsNullOrWhiteSpace(body.Speciality) ? null : body.Speciality.Trim()
-        );
+        if (!ModelState.IsValid)
+        {
+            return ValidationProblem(ModelState);
+        }
 
-        _db.Staff.Add(s);
-        await _db.SaveChangesAsync();
+        var result = await _staff.CreateAsync(body, ct);
+        if (!result.Success)
+        {
+            return MapError(result.Error!);
+        }
 
-        return CreatedAtAction(nameof(GetById), new { id = s.Id }, ToDto(s));
+        return CreatedAtAction(nameof(GetById), new { id = result.Value!.Id }, result.Value);
     }
 
     [HttpGet("{id:guid}")]
-    public async Task<ActionResult<StaffDto>> GetById(Guid id)
+    public async Task<ActionResult<AdminStaffDto>> GetById(Guid id, CancellationToken ct)
     {
-        var s = await _db.Staff.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id);
-        if (s is null) return NotFound();
-        return ToDto(s);
+        var result = await _staff.GetByIdAsync(id, ct);
+        if (!result.Success)
+        {
+            return MapError(result.Error!);
+        }
+
+        return Ok(result.Value);
     }
 
     [HttpPost("{id:guid}/link")]
-    public async Task<IActionResult> LinkFirebase(Guid id, [FromBody] LinkFirebaseRequest body)
+    public async Task<IActionResult> LinkFirebase(Guid id, [FromBody] LinkFirebaseRequest body, CancellationToken ct)
     {
-        var s = await _db.Staff.FirstOrDefaultAsync(x => x.Id == id);
-        if (s is null) return NotFound();
+        if (!ModelState.IsValid)
+        {
+            return ValidationProblem(ModelState);
+        }
 
-        // garantir que o UID não está já ligado a outro staff
-        var exists = await _db.Staff.AnyAsync(x => x.FirebaseUid == body.Uid && x.Id != id);
-        if (exists)
-            return Conflict(new ProblemDetails { Title = "UID já ligado a outro Staff", Status = 409 });
-
-        s.LinkFirebase(body.Uid); // método que adicionaste no domínio
-        await _db.SaveChangesAsync();
+        var result = await _staff.LinkFirebaseAsync(id, body, ct);
+        if (!result.Success)
+        {
+            return MapError(result.Error!);
+        }
 
         return NoContent();
     }
 
-    private static StaffDto ToDto(Staff s) =>
-        new(
-            s.Id,
-            s.FirstName,
-            s.LastName,
-            s.Email,
-            s.Phone,
-            s.StaffNumber,
-            s.Speciality,
-            s.FirebaseUid
-        );
+    private ActionResult MapError(ServiceError error)
+    {
+        var problem = error.ToProblemDetails();
+
+        return error.StatusCode switch
+        {
+            400 => BadRequest(problem),
+            401 => Unauthorized(problem),
+            404 => NotFound(problem),
+            409 => Conflict(problem),
+            _ => StatusCode(error.StatusCode, problem)
+        };
+    }
 }
