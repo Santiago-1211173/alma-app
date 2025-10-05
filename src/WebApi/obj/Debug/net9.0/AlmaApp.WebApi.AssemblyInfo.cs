@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("AlmaApp.WebApi")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+431c8fa11a4fad31d6a59938345bfccb9a68716a")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+49ef1b08642cf8d58026db86e3d6f97991d7e58d")]
 [assembly: System.Reflection.AssemblyProductAttribute("AlmaApp.WebApi")]
 [assembly: System.Reflection.AssemblyTitleAttribute("AlmaApp.WebApi")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

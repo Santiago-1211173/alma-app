@@ -9,7 +9,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace AlmaApp.WebApi.Controllers;
 
-[Authorize]
+[Authorize(Policy = "Admin")]
 [ApiController]
 [Route("api/v1/activities")]
 public sealed class ActivitiesController : ControllerBase

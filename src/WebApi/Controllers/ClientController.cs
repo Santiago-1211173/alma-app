@@ -15,8 +15,7 @@ namespace AlmaApp.WebApi.Controllers;
 [Authorize(Policy = "EmailVerified")]
 [ApiController]
 [Route("api/v1/[controller]")]
-public class ClientsController : ControllerBase
-{
+public class ClientsController : ControllerBase{
     private readonly AppDbContext _db;
     public ClientsController(AppDbContext db) => _db = db;
 
