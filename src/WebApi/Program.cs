@@ -43,6 +43,16 @@ var authority = $"https://securetoken.google.com/{projectId}";
 // ---- RBAC / UserContext & Authorization ----
 builder.Services.AddScoped<IUserContext, UserContext>();
 builder.Services.AddScoped<IActivitiesService, ActivitiesService>();
+builder.Services.AddScoped<IRoomsService, RoomsService>();
+builder.Services.AddScoped<IStaffService, StaffService>();
+builder.Services.AddScoped<IClientsService, ClientsService>();
+builder.Services.AddScoped<IClassesService, ClassesService>();
+builder.Services.AddScoped<IClassRequestsService, ClassRequestsService>();
+builder.Services.AddScoped<IAdminStaffService, AdminStaffService>();
+builder.Services.AddScoped<IAdminRbacService, AdminRbacService>();
+builder.Services.AddScoped<IMeService, MeService>();
+builder.Services.AddScoped<IMeOnboardingService, MeOnboardingService>();
+builder.Services.AddScoped<IAvailabilityService, AvailabilityService>();
 builder.Services.AddScoped<IAuthorizationHandler, RoleAuthorizationHandler>();       // was Singleton -> Scoped
 builder.Services.AddScoped<IAuthorizationHandler, RolesAnyAuthorizationHandler>();   // was Singleton -> Scoped
 

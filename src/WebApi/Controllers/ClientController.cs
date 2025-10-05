@@ -1,118 +1,110 @@
 using System;
-using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
-using AlmaApp.Domain.Clients;                 // Entidade Client (Domain)
-using AlmaApp.Infrastructure;                // AppDbContext (Infra)
-using AlmaApp.WebApi.Common;                 // PagedResult
-using AlmaApp.WebApi.Features.Clients;       // ClientListItemDto
-using AlmaApp.WebApi.Contracts.Clients;      // CreateClientRequest, UpdateClientRequest
+using AlmaApp.WebApi.Common;
+using AlmaApp.WebApi.Contracts.Clients;
+using AlmaApp.WebApi.Features.Clients;
+using AlmaApp.WebApi.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace AlmaApp.WebApi.Controllers;
 
 [Authorize(Policy = "EmailVerified")]
 [ApiController]
 [Route("api/v1/[controller]")]
-public class ClientsController : ControllerBase{
-    private readonly AppDbContext _db;
-    public ClientsController(AppDbContext db) => _db = db;
+public class ClientsController : ControllerBase
+{
+    private readonly IClientsService _clients;
 
-    // GET /api/v1/clients?q=ana&page=1&pageSize=10
+    public ClientsController(IClientsService clients)
+        => _clients = clients;
+
     [HttpGet]
     public async Task<ActionResult<PagedResult<ClientListItemDto>>> Search(
-        [FromQuery] string? q, [FromQuery] int page = 1, [FromQuery] int pageSize = 10)
+        [FromQuery] string? q,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 10,
+        CancellationToken ct = default)
     {
-        page     = page     < 1 ? 1  : page;
-        pageSize = pageSize < 1 ? 10 : (pageSize > 200 ? 200 : pageSize);
-
-        var query = _db.Clients.AsNoTracking();
-
-        if (!string.IsNullOrWhiteSpace(q))
+        var result = await _clients.SearchAsync(q, page, pageSize, ct);
+        if (!result.Success)
         {
-            var term = q.Trim();
-            query = query.Where(c =>
-                EF.Functions.Like(c.FirstName, $"%{term}%") ||
-                EF.Functions.Like(c.LastName,  $"%{term}%")  ||
-                EF.Functions.Like(c.Email,     $"%{term}%")  ||
-                EF.Functions.Like(c.Phone ?? "", $"%{term}%")); // null-safe
+            return MapError(result.Error!);
         }
 
-        var total = await query.CountAsync();
-
-        var items = await query
-            .OrderBy(c => c.LastName).ThenBy(c => c.FirstName)
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
-            .Select(c => new ClientListItemDto(c.Id, c.FirstName, c.LastName, c.Email, c.Phone))
-            .ToListAsync();
-
-        return Ok(PagedResult<ClientListItemDto>.Create(items, page, pageSize, total));
+        return Ok(result.Value);
     }
 
-    // GET /api/v1/clients/{id}
     [HttpGet("{id:guid}")]
-    public async Task<IActionResult> GetById(Guid id)
+    public async Task<IActionResult> GetById(Guid id, CancellationToken ct)
     {
-        var c = await _db.Clients.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id);
-        return c is null ? NotFound() : Ok(c);
+        var result = await _clients.GetByIdAsync(id, ct);
+        if (!result.Success)
+        {
+            return MapError(result.Error!);
+        }
+
+        return Ok(result.Value);
     }
 
-    // POST /api/v1/clients
     [HttpPost]
-    public async Task<IActionResult> Create([FromBody] CreateClientRequest body)
+    public async Task<IActionResult> Create([FromBody] CreateClientRequest body, CancellationToken ct)
     {
-        if (!ModelState.IsValid) return ValidationProblem(ModelState);
+        if (!ModelState.IsValid)
+        {
+            return ValidationProblem(ModelState);
+        }
 
-        var client = new Client(
-            id: Guid.NewGuid(),                                    // requer overload com Id no Domain
-            firstName: body.FirstName.Trim(),
-            lastName: body.LastName.Trim(),
-            email: body.Email.Trim().ToLowerInvariant(),
-            citizenCardNumber: body.CitizenCardNumber.Trim(),
-            phone: body.Phone?.Trim(),
-            birthDate: body.BirthDate
-        );
+        var result = await _clients.CreateAsync(body, ct);
+        if (!result.Success)
+        {
+            return MapError(result.Error!);
+        }
 
-        _db.Clients.Add(client);
-        await _db.SaveChangesAsync();
-
-        return CreatedAtAction(nameof(GetById), new { id = client.Id }, client);
+        return CreatedAtAction(nameof(GetById), new { id = result.Value!.Id }, result.Value);
     }
 
-    // PUT /api/v1/clients/{id}
     [HttpPut("{id:guid}")]
-    public async Task<IActionResult> Update(Guid id, [FromBody] UpdateClientRequest body)
+    public async Task<IActionResult> Update(Guid id, [FromBody] UpdateClientRequest body, CancellationToken ct)
     {
-        if (!ModelState.IsValid) return ValidationProblem(ModelState);
+        if (!ModelState.IsValid)
+        {
+            return ValidationProblem(ModelState);
+        }
 
-        var c = await _db.Clients.FirstOrDefaultAsync(x => x.Id == id);
-        if (c is null) return NotFound();
+        var result = await _clients.UpdateAsync(id, body, ct);
+        if (!result.Success)
+        {
+            return MapError(result.Error!);
+        }
 
-        // Se adicionaste o método Update() no domínio (recomendado):
-        c.Update(
-            body.FirstName.Trim(),
-            body.LastName.Trim(),
-            body.Email.Trim().ToLowerInvariant(),
-            body.CitizenCardNumber.Trim(),
-            body.Phone?.Trim(),
-            body.BirthDate
-        );
-
-        await _db.SaveChangesAsync();
         return NoContent();
     }
 
-    // DELETE /api/v1/clients/{id}
     [HttpDelete("{id:guid}")]
-    public async Task<IActionResult> Delete(Guid id)
+    public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
     {
-        var c = await _db.Clients.FirstOrDefaultAsync(x => x.Id == id);
-        if (c is null) return NotFound();
+        var result = await _clients.DeleteAsync(id, ct);
+        if (!result.Success)
+        {
+            return MapError(result.Error!);
+        }
 
-        _db.Clients.Remove(c);
-        await _db.SaveChangesAsync();
         return NoContent();
+    }
+
+    private ActionResult MapError(ServiceError error)
+    {
+        var problem = error.ToProblemDetails();
+
+        return error.StatusCode switch
+        {
+            400 => BadRequest(problem),
+            401 => Unauthorized(problem),
+            404 => NotFound(problem),
+            409 => Conflict(problem),
+            _ => StatusCode(error.StatusCode, problem)
+        };
     }
 }

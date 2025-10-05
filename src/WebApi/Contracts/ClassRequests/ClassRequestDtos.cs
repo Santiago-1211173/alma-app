@@ -28,6 +28,16 @@ namespace AlmaApp.WebApi.Contracts.ClassRequests
         DateTime CreatedAtUtc
     );
 
+    public record ClientClassRequestSummaryDto(
+        Guid Id,
+        Guid StaffId,
+        Guid RoomId,
+        DateTime ProposedStartUtc,
+        int DurationMinutes,
+        int Status,
+        string? Notes
+    );
+
     // Criação (pelo Staff) — RoomId obrigatório
     public record CreateClassRequestByStaff(
         Guid?   ClientId,
