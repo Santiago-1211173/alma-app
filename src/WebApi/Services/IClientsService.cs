@@ -3,7 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using AlmaApp.WebApi.Common;
 using AlmaApp.WebApi.Contracts.Clients;
-
+using AlmaApp.WebApi.Features.Clients;
 namespace AlmaApp.WebApi.Services;
 
 public interface IClientsService
