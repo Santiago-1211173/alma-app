@@ -62,7 +62,7 @@ public sealed class MeOnboardingService : IMeOnboardingService
         await _db.Clients.AddAsync(client, ct);
         await _db.SaveChangesAsync(ct);
 
-        return ServiceResult<OnboardingResult>.Ok(new OnboardingResult("Perfil de cliente criado.", clientId: client.Id));
+        return ServiceResult<OnboardingResult>.Ok(new OnboardingResult("Perfil de cliente criado.", ClientId: client.Id));
     }
 
     public async Task<ServiceResult<OnboardingResult>> ClaimStaffAsync(ClaimStaffBody request, CancellationToken ct)
@@ -106,6 +106,6 @@ public sealed class MeOnboardingService : IMeOnboardingService
 
         await _db.SaveChangesAsync(ct);
 
-        return ServiceResult<OnboardingResult>.Ok(new OnboardingResult("Conta associada como Staff.", staffId: staff.Id));
+        return ServiceResult<OnboardingResult>.Ok(new OnboardingResult("Conta associada como Staff.", StaffId: staff.Id));
     }
 }

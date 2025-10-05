@@ -73,11 +73,11 @@ public sealed class RoomsService : IRoomsService
         {
             room = new Room(request.Name, request.Capacity, request.IsActive);
         }
-        catch (ArgumentException ex)
+        catch (ArgumentOutOfRangeException ex)
         {
             return ServiceResult<RoomResponse>.Fail(new ServiceError(400, ex.Message));
         }
-        catch (ArgumentOutOfRangeException ex)
+        catch (ArgumentException ex)
         {
             return ServiceResult<RoomResponse>.Fail(new ServiceError(400, ex.Message));
         }
@@ -100,11 +100,11 @@ public sealed class RoomsService : IRoomsService
         {
             room.Update(request.Name, request.Capacity, request.IsActive);
         }
-        catch (ArgumentException ex)
+        catch (ArgumentOutOfRangeException ex)
         {
             return ServiceResult.Fail(new ServiceError(400, ex.Message));
         }
-        catch (ArgumentOutOfRangeException ex)
+        catch (ArgumentException ex)
         {
             return ServiceResult.Fail(new ServiceError(400, ex.Message));
         }
