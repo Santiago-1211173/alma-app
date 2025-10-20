@@ -1,93 +1,117 @@
 using System;
+using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
+using System.Linq;
+using AlmaApp.Domain.Activities;
 
-namespace AlmaApp.Domain.Activities;
-
-/// <summary>
-/// Representa uma actividade extra aula definida pelo staff. As actividades têm
-/// um título, uma descrição opcional, sala associada e hora de início/duração.
-/// Não existe fluxo de pedido (request) para actividades; são marcadas de
-/// forma directa e os clientes podem inscrever‑se externamente através da UI.
-/// </summary>
-public enum ActivityStatus { Scheduled = 0, Completed = 1, Canceled = 9 }
-
-public class Activity
+namespace AlmaApp.Domain.Activities
 {
-    public Guid Id { get; private set; }
-    public string Title { get; private set; } = default!;
-    public string? Description { get; private set; }
-    public Guid RoomId { get; private set; }
-    public DateTime StartUtc { get; private set; }
-    public int DurationMinutes { get; private set; }
-    public ActivityStatus Status { get; private set; }
-    public string CreatedByUid { get; private set; } = default!;
-    public DateTime CreatedAtUtc { get; private set; }
-    public byte[] RowVersion { get; private set; } = default!;
-
-    // EF requires a parameterless constructor
-    private Activity() { }
-
-    /// <summary>
-    /// Cria uma nova actividade. A duração deve estar entre 15 e 180 minutos.
-    /// </summary>
-    public Activity(string title, string? description, Guid roomId,
-                    DateTime startUtc, int durationMinutes, string createdByUid)
+    public enum ActivityStatus
     {
-        if (string.IsNullOrWhiteSpace(title)) throw new ArgumentException(nameof(title));
-        if (durationMinutes < 15 || durationMinutes > 180)
-            throw new ArgumentOutOfRangeException(nameof(durationMinutes));
-
-        Id = Guid.NewGuid();
-        Title = title.Trim();
-        Description = string.IsNullOrWhiteSpace(description) ? null : description.Trim();
-        RoomId = roomId;
-        StartUtc = DateTime.SpecifyKind(startUtc, DateTimeKind.Utc);
-        DurationMinutes = durationMinutes;
-        Status = ActivityStatus.Scheduled;
-        CreatedByUid = createdByUid.Trim();
-        CreatedAtUtc = DateTime.UtcNow;
+        Scheduled = 0,
+        Completed = 1,
+        Canceled = 2
     }
 
-    /// <summary>
-    /// Actualiza os dados da actividade enquanto estiver agendada. Não permite
-    /// editar actividades já concluídas ou canceladas.
-    /// </summary>
-    public void Update(string title, string? description, DateTime startUtc, int durationMinutes, Guid roomId)
+    public sealed class Activity
     {
-        if (Status != ActivityStatus.Scheduled)
-            throw new InvalidOperationException("Só actividades agendadas podem ser editadas.");
-        if (string.IsNullOrWhiteSpace(title)) throw new ArgumentException(nameof(title));
-        if (durationMinutes < 15 || durationMinutes > 180)
-            throw new ArgumentOutOfRangeException(nameof(durationMinutes));
+        public Guid Id { get; private set; }
+        public Guid RoomId { get; private set; }
+        public Guid InstructorId { get; private set; }  // Novo
+        public string Title { get; private set; } = default!;
+        public string? Description { get; private set; }
+        public ActivityCategory Category { get; private set; } // Ex.: Workshop
+        public DateTime StartLocal { get; private set; }
+        public int DurationMinutes { get; private set; }
+        public int MaxParticipants { get; private set; }       // Novo
+        public ActivityStatus Status { get; private set; }
+        public string? CreatedByUid { get; private set; }
+        public DateTime CreatedAtLocal { get; private set; }
+        [Timestamp] public byte[] RowVersion { get; private set; } = Array.Empty<byte>();
 
-        Title = title.Trim();
-        Description = string.IsNullOrWhiteSpace(description) ? null : description.Trim();
-        StartUtc = DateTime.SpecifyKind(startUtc, DateTimeKind.Utc);
-        DurationMinutes = durationMinutes;
-        RoomId = roomId;
+        private readonly List<ActivityParticipant> _participants = new();
+        public IReadOnlyCollection<ActivityParticipant> Participants => _participants.AsReadOnly();
+
+        private Activity() { } // EF
+
+        public Activity(Guid roomId, Guid instructorId, string title, string? description,
+                        ActivityCategory category, DateTime startLocal, int durationMinutes, int maxParticipants,
+                        string? createdByUid, DateTime createdAtLocal)
+        {
+            if (string.IsNullOrWhiteSpace(title)) throw new ArgumentException(nameof(title));
+            if (durationMinutes <= 0) throw new ArgumentOutOfRangeException(nameof(durationMinutes));
+            if (maxParticipants <= 0) throw new ArgumentOutOfRangeException(nameof(maxParticipants));
+
+            Id = Guid.NewGuid();
+            RoomId = roomId;
+            InstructorId = instructorId;
+            Title = title.Trim();
+            Description = string.IsNullOrWhiteSpace(description) ? null : description.Trim();
+            Category = category;
+            StartLocal = DateTime.SpecifyKind(startLocal, DateTimeKind.Unspecified);
+            DurationMinutes = durationMinutes;
+            MaxParticipants = maxParticipants;
+            Status = ActivityStatus.Scheduled;
+            CreatedByUid = createdByUid;
+            CreatedAtLocal = DateTime.SpecifyKind(createdAtLocal, DateTimeKind.Unspecified);
+        }
+
+        public DateTime EndLocal => StartLocal.AddMinutes(DurationMinutes);
+        public int ActiveCount => _participants.Count(p => p.Status == ActivityParticipantStatus.Active);
+        public int AvailableSlots => Math.Max(0, MaxParticipants - ActiveCount);
+        public bool IsFull => AvailableSlots <= 0;
+
+        public void Update(Guid roomId, Guid instructorId, string title, string? description,
+                           ActivityCategory category, DateTime startLocal, int durationMinutes, int maxParticipants)
+        {
+            if (Status != ActivityStatus.Scheduled)
+                throw new InvalidOperationException("Só é possível editar actividades agendadas.");
+            if (string.IsNullOrWhiteSpace(title)) throw new ArgumentException(nameof(title));
+            if (durationMinutes <= 0) throw new ArgumentOutOfRangeException(nameof(durationMinutes));
+            if (maxParticipants <= 0) throw new ArgumentOutOfRangeException(nameof(maxParticipants));
+            if (ActiveCount > maxParticipants)
+                throw new InvalidOperationException("Capacidade inferior ao número de participantes activos.");
+
+            RoomId = roomId;
+            InstructorId = instructorId;
+            Title = title.Trim();
+            Description = string.IsNullOrWhiteSpace(description) ? null : description.Trim();
+            Category = category;
+            StartLocal = DateTime.SpecifyKind(startLocal, DateTimeKind.Unspecified);
+            DurationMinutes = durationMinutes;
+            MaxParticipants = maxParticipants;
+        }
+
+        public void Cancel()
+        {
+            if (Status == ActivityStatus.Canceled) return;
+            if (Status == ActivityStatus.Completed)
+                throw new InvalidOperationException("Actividade já concluída.");
+            Status = ActivityStatus.Canceled;
+        }
+
+        public void Complete()
+        {
+            if (Status != ActivityStatus.Scheduled)
+                throw new InvalidOperationException("Só é possível concluir actividades agendadas.");
+            Status = ActivityStatus.Completed;
+        }
+
+        public void AddParticipant(Guid clientId, DateTime nowLocal)
+        {
+            if (Status != ActivityStatus.Scheduled)
+                throw new InvalidOperationException("Actividade não está agendada.");
+            if (IsFull) throw new InvalidOperationException("Actividade sem vagas.");
+            if (_participants.Any(p => p.ClientId == clientId && p.Status == ActivityParticipantStatus.Active))
+                throw new InvalidOperationException("Cliente já inscrito.");
+            _participants.Add(new ActivityParticipant(Id, clientId, nowLocal));
+        }
+
+        public void RemoveParticipant(Guid clientId, DateTime nowLocal)
+        {
+            var p = _participants.FirstOrDefault(x => x.ClientId == clientId && x.Status == ActivityParticipantStatus.Active);
+            if (p == null) return;
+            p.Cancel(nowLocal);
+        }
     }
-
-    /// <summary>
-    /// Cancela a actividade. Se já estiver cancelada, não faz nada.
-    /// </summary>
-    public void Cancel()
-    {
-        if (Status == ActivityStatus.Canceled) return;
-        Status = ActivityStatus.Canceled;
-    }
-
-    /// <summary>
-    /// Marca a actividade como concluída. Apenas actividades agendadas podem
-    /// ser concluídas.
-    /// </summary>
-    public void Complete()
-    {
-        if (Status != ActivityStatus.Scheduled)
-            throw new InvalidOperationException("Só actividades agendadas podem ser concluídas.");
-        Status = ActivityStatus.Completed;
-    }
-
-    /// <summary>
-    /// Data/hora de fim calculada a partir da duração.
-    /// </summary>
-    public DateTime EndUtc => StartUtc.AddMinutes(DurationMinutes);
 }

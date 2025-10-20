@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("AlmaApp.Infrastructure")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+3d224bdc723be2a7b0e9454a5d3361b333a1c3b2")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+450331934db715aa087f6818d31be6807ef2d6e6")]
 [assembly: System.Reflection.AssemblyProductAttribute("AlmaApp.Infrastructure")]
 [assembly: System.Reflection.AssemblyTitleAttribute("AlmaApp.Infrastructure")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

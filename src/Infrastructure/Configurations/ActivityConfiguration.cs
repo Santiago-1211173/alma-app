@@ -2,50 +2,34 @@ using AlmaApp.Domain.Activities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
-namespace AlmaApp.Infrastructure.Configurations;
-
-/// <summary>
-/// Configuração EF Core para a entidade Activity. Define tabela, chaves,
-/// comprimentos de campos e token de concorrência optimista.
-/// </summary>
-public sealed class ActivityConfiguration : IEntityTypeConfiguration<Activity>
+namespace AlmaApp.Infrastructure.Configurations
 {
-    public void Configure(EntityTypeBuilder<Activity> b)
+    public sealed class ActivityConfiguration : IEntityTypeConfiguration<Activity>
     {
-        b.ToTable("Activities");
-        b.HasKey(x => x.Id);
+        public void Configure(EntityTypeBuilder<Activity> b)
+        {
+            b.ToTable("Activities");
+            b.HasKey(a => a.Id);
 
-        b.Property(x => x.Title)
-            .HasMaxLength(200)
-            .IsRequired();
+            b.Property(a => a.Title).HasMaxLength(200).IsRequired();
+            b.Property(a => a.Description).HasMaxLength(2000);
+            b.Property(a => a.Category).HasConversion<int>().IsRequired();
+            b.Property(a => a.RoomId).IsRequired();
+            b.Property(a => a.InstructorId).IsRequired();
+            b.Property(a => a.StartLocal).IsRequired();
+            b.Property(a => a.DurationMinutes).IsRequired();
+            b.Property(a => a.MaxParticipants).IsRequired();
+            b.Property(a => a.Status).HasConversion<int>().IsRequired();
+            b.Property(a => a.CreatedAtLocal).IsRequired();
+            b.Property(a => a.RowVersion).IsRowVersion();
 
-        b.Property(x => x.Description)
-            .HasMaxLength(500);
+            b.HasIndex(a => new { a.RoomId, a.StartLocal });
+            b.HasIndex(a => new { a.InstructorId, a.StartLocal });
 
-        b.Property(x => x.RoomId)
-            .IsRequired();
-
-        b.Property(x => x.StartUtc)
-            .IsRequired();
-
-        b.Property(x => x.DurationMinutes)
-            .IsRequired();
-
-        b.Property(x => x.Status)
-            .IsRequired();
-
-        b.Property(x => x.CreatedByUid)
-            .HasMaxLength(128)
-            .IsRequired();
-
-        b.Property(x => x.CreatedAtUtc)
-            .HasDefaultValueSql("GETUTCDATE()")
-            .IsRequired();
-
-        b.Property(x => x.RowVersion)
-            .IsRowVersion();
-
-        // Indice para ordenar rapidamente por data de início e sala
-        b.HasIndex(x => new { x.RoomId, x.StartUtc });
+            b.HasMany(a => a.Participants)
+             .WithOne()
+             .HasForeignKey(p => p.ActivityId)
+             .OnDelete(DeleteBehavior.Cascade);
+        }
     }
 }

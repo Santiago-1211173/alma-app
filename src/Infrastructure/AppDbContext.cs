@@ -29,6 +29,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> opts) : DbContex
     public DbSet<ServiceAppointment> ServiceAppointments => Set<ServiceAppointment>();
     public DbSet<GroupClass> GroupClasses => Set<GroupClass>();
     public DbSet<GroupClassParticipant> GroupClassParticipants => Set<GroupClassParticipant>();
+    public DbSet<ActivityParticipant> ActivityParticipants => Set<ActivityParticipant>();
 
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)

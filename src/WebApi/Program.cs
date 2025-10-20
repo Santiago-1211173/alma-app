@@ -42,7 +42,6 @@ var authority = $"https://securetoken.google.com/{projectId}";
 
 // ---- RBAC / UserContext & Authorization ----
 builder.Services.AddScoped<IUserContext, UserContext>();
-builder.Services.AddScoped<IActivitiesService, ActivitiesService>();
 builder.Services.AddScoped<IRoomsService, RoomsService>();
 builder.Services.AddScoped<IStaffService, StaffService>();
 builder.Services.AddScoped<IClientsService, ClientsService>();
@@ -58,6 +57,8 @@ builder.Services.AddScoped<IAuthorizationHandler, RolesAnyAuthorizationHandler>(
 builder.Services.AddScoped<IClientMembershipService, ClientMembershipService>();
 builder.Services.AddScoped<IServiceAppointmentService, ServiceAppointmentService>();
 builder.Services.AddScoped<IGroupClassService, GroupClassService>();
+builder.Services.AddScoped<IActivityService, ActivityService>();
+
 
 
 builder.Services.AddAuthorization(opt =>

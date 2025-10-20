@@ -1,114 +1,125 @@
 using System;
+using System.Security.Claims;
 using System.Threading;
 using System.Threading.Tasks;
+using AlmaApp.Domain.Activities;
 using AlmaApp.WebApi.Common;
 using AlmaApp.WebApi.Contracts.Activities;
 using AlmaApp.WebApi.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
-namespace AlmaApp.WebApi.Controllers;
-
-[Authorize(Policy = "Admin")]
-[ApiController]
-[Route("api/v1/activities")]
-public sealed class ActivitiesController : ControllerBase
+namespace AlmaApp.WebApi.Controllers
 {
-    private readonly IActivitiesService _activities;
-
-    public ActivitiesController(IActivitiesService activities)
-        => _activities = activities;
-
-    [HttpGet]
-    public async Task<ActionResult<PagedResult<ActivityListItemDto>>> Search(
-        [FromQuery] Guid? roomId,
-        [FromQuery] DateTime? from,
-        [FromQuery] DateTime? to,
-        [FromQuery] int? status,
-        [FromQuery] int page = 1,
-        [FromQuery] int pageSize = 10,
-        CancellationToken ct = default)
+    [Authorize]
+    [ApiController]
+    [Route("api/v1/activities")]
+    public sealed class ActivitiesController : ControllerBase
     {
-        var result = await _activities.SearchAsync(roomId, from, to, status, page, pageSize, ct);
-        if (!result.Success)
+        private readonly IActivityService _service;
+
+        public ActivitiesController(IActivityService service) => _service = service;
+
+        [HttpGet]
+        public async Task<ActionResult<PagedResult<ActivityListItemDto>>> Search(
+            [FromQuery] Guid? roomId,
+            [FromQuery] Guid? instructorId,
+            [FromQuery] ActivityCategory? category,
+            [FromQuery] DateTime? fromLocal,
+            [FromQuery] DateTime? toLocal,
+            [FromQuery] ActivityStatus? status,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 20,
+            CancellationToken ct = default)
         {
-            return MapError(result.Error!);
+            var result = await _service.SearchAsync(roomId, instructorId, category,
+                                                    fromLocal, toLocal, status,
+                                                    page, pageSize, ct);
+            return Ok(result);
         }
 
-        return Ok(result.Value);
-    }
-
-    [HttpGet("{id:guid}")]
-    public async Task<IActionResult> GetById(Guid id, CancellationToken ct)
-    {
-        var result = await _activities.GetByIdAsync(id, ct);
-        if (!result.Success)
+        [HttpGet("{id:guid}")]
+        public async Task<ActionResult<ActivityResponse>> GetById(Guid id, CancellationToken ct = default)
         {
-            return MapError(result.Error!);
+            var a = await _service.GetByIdAsync(id, ct);
+            return a == null ? NotFound() : Ok(a);
         }
 
-        return Ok(result.Value);
-    }
-
-    [HttpPost]
-    public async Task<IActionResult> Create([FromBody] CreateActivityRequestDto body, CancellationToken ct)
-    {
-        var result = await _activities.CreateAsync(body, ct);
-        if (!result.Success)
+        [HttpPost]
+        public async Task<ActionResult<ActivityResponse>> Create([FromBody] CreateActivityRequestDto dto, CancellationToken ct = default)
         {
-            return MapError(result.Error!);
+            var uid = User.FindFirstValue("user_id") ?? User.FindFirstValue(ClaimTypes.NameIdentifier);
+            try
+            {
+                var created = await _service.CreateAsync(dto, uid, ct);
+                return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(Problem(detail: ex.Message, statusCode: 409));
+            }
         }
 
-        return CreatedAtAction(nameof(GetById), new { id = result.Value!.Id }, result.Value);
-    }
-
-    [HttpPut("{id:guid}")]
-    public async Task<IActionResult> Update(Guid id, [FromBody] UpdateActivityRequestDto body, CancellationToken ct)
-    {
-        var result = await _activities.UpdateAsync(id, body, ct);
-        if (!result.Success)
+        [HttpPut("{id:guid}")]
+        public async Task<ActionResult<ActivityResponse>> Update(Guid id, [FromBody] UpdateActivityRequestDto dto, CancellationToken ct = default)
         {
-            return MapError(result.Error!);
+            try
+            {
+                var updated = await _service.UpdateAsync(id, dto, ct);
+                return Ok(updated);
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                return Conflict(Problem(detail: "Concorrência: RowVersion desactualizado.", statusCode: 409));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(Problem(detail: ex.Message, statusCode: 409));
+            }
+            catch (KeyNotFoundException)
+            {
+                return NotFound();
+            }
         }
 
-        return NoContent();
-    }
-
-    [HttpDelete("{id:guid}")]
-    public async Task<IActionResult> Cancel(Guid id, CancellationToken ct)
-    {
-        var result = await _activities.CancelAsync(id, ct);
-        if (!result.Success)
+        [HttpDelete("{id:guid}")]
+        public async Task<IActionResult> Cancel(Guid id, CancellationToken ct = default)
         {
-            return MapError(result.Error!);
+            await _service.CancelAsync(id, ct);
+            return NoContent();
         }
 
-        return NoContent();
-    }
-
-    [HttpPost("{id:guid}/complete")]
-    public async Task<IActionResult> Complete(Guid id, CancellationToken ct)
-    {
-        var result = await _activities.CompleteAsync(id, ct);
-        if (!result.Success)
+        [HttpPost("{id:guid}/complete")]
+        public async Task<IActionResult> Complete(Guid id, CancellationToken ct = default)
         {
-            return MapError(result.Error!);
+            await _service.CompleteAsync(id, ct);
+            return NoContent();
         }
 
-        return NoContent();
-    }
-
-    private ActionResult MapError(ServiceError error)
-    {
-        var problem = error.ToProblemDetails();
-
-        return error.StatusCode switch
+        [HttpPost("{id:guid}/participants")]
+        public async Task<IActionResult> Join(Guid id, [FromBody] JoinActivityRequestDto dto, CancellationToken ct = default)
         {
-            400 => BadRequest(problem),
-            401 => Unauthorized(problem),
-            404 => NotFound(problem),
-            409 => Conflict(problem),
-            _ => StatusCode(error.StatusCode, problem)
-        };
+            try
+            {
+                await _service.JoinAsync(id, dto.ClientId, DateTime.Now, ct);
+                return NoContent();
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(Problem(detail: ex.Message, statusCode: 409));
+            }
+            catch (KeyNotFoundException)
+            {
+                return NotFound();
+            }
+        }
+
+        [HttpDelete("{id:guid}/participants/{clientId:guid}")]
+        public async Task<IActionResult> Leave(Guid id, Guid clientId, CancellationToken ct = default)
+        {
+            await _service.LeaveAsync(id, clientId, DateTime.Now, ct);
+            return NoContent();
+        }
     }
 }
