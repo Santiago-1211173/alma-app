@@ -28,17 +28,20 @@ namespace AlmaApp.WebApi.Services
             if (string.IsNullOrWhiteSpace(firebaseUid)) throw new ArgumentException("firebaseUid must be provided", nameof(firebaseUid));
 
             var client = await _db.Clients
-                .AsNoTracking()
-                .Where(c => c.FirebaseUid == firebaseUid)
-                .Select(c => new { c.Id })
-                .FirstOrDefaultAsync(ct);
-            if (client == null) return null;
+                .FirstOrDefaultAsync(c => c.FirebaseUid == firebaseUid, ct);
+            if (client == null || client.CurrentMembershipId is null) return null;
 
             var membership = await _db.ClientMemberships
                 .AsNoTracking()
-                .Where(m => m.ClientId == client.Id && m.Status == MembershipStatus.Active)
-                .FirstOrDefaultAsync(ct);
-            if (membership == null) return null;
+                .FirstOrDefaultAsync(m => m.Id == client.CurrentMembershipId.Value, ct);
+            if (membership == null || membership.Status != MembershipStatus.Active)
+            {
+                await using var tx = await _db.Database.BeginTransactionAsync(ct);
+                client.ClearCurrentMembership();
+                await _db.SaveChangesAsync(ct);
+                await tx.CommitAsync(ct);
+                return null;
+            }
 
             return new MembershipResponse(
                 membership.Id,
@@ -55,25 +58,26 @@ namespace AlmaApp.WebApi.Services
             if (clientId == Guid.Empty) throw new ArgumentException("clientId must be provided", nameof(clientId));
             if (string.IsNullOrWhiteSpace(createdByUid)) throw new ArgumentException("createdByUid must be provided", nameof(createdByUid));
 
-            // check if client exists
-            var exists = await _db.Clients.AnyAsync(c => c.Id == clientId, ct);
-            if (!exists)
+            var client = await _db.Clients.FirstOrDefaultAsync(c => c.Id == clientId, ct);
+            if (client is null)
             {
                 throw new InvalidOperationException($"Client {clientId} not found.");
             }
 
-            // check for existing active membership
-            var active = await _db.ClientMemberships
-                .Where(m => m.ClientId == clientId && m.Status == MembershipStatus.Active)
-                .FirstOrDefaultAsync(ct);
-            if (active != null)
+            if (client.CurrentMembershipId.HasValue)
             {
                 throw new InvalidOperationException("Client already has an active membership.");
             }
 
             var membership = new ClientMembership(clientId, startUtc, billingPeriod, nif, createdByUid);
+
+            await using var tx = await _db.Database.BeginTransactionAsync(ct);
+
             _db.ClientMemberships.Add(membership);
+            client.SetCurrentMembership(membership.Id);
+
             await _db.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
 
             return new MembershipResponse(
                 membership.Id,
@@ -90,13 +94,54 @@ namespace AlmaApp.WebApi.Services
             if (clientId == Guid.Empty) throw new ArgumentException("clientId must be provided", nameof(clientId));
             if (string.IsNullOrWhiteSpace(cancelledByUid)) throw new ArgumentException("cancelledByUid must be provided", nameof(cancelledByUid));
 
+            var client = await _db.Clients.FirstOrDefaultAsync(c => c.Id == clientId, ct);
+            if (client is null) return;
+
+            if (client.CurrentMembershipId is null)
+            {
+                return;
+            }
+
+            await using var tx = await _db.Database.BeginTransactionAsync(ct);
+
             var membership = await _db.ClientMemberships
-                .Where(m => m.ClientId == clientId && m.Status == MembershipStatus.Active)
-                .FirstOrDefaultAsync(ct);
-            if (membership == null) return;
+                .FirstOrDefaultAsync(m => m.Id == client.CurrentMembershipId.Value, ct);
+
+            if (membership is null || membership.Status != MembershipStatus.Active)
+            {
+                client.ClearCurrentMembership();
+                await _db.SaveChangesAsync(ct);
+                await tx.CommitAsync(ct);
+                return;
+            }
 
             membership.Cancel();
+            client.ClearCurrentMembership();
+
             await _db.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
+        }
+
+        public async Task ExpireMembershipAsync(Guid membershipId, CancellationToken ct)
+        {
+            if (membershipId == Guid.Empty) throw new ArgumentException("membershipId must be provided", nameof(membershipId));
+
+            var membership = await _db.ClientMemberships.FirstOrDefaultAsync(m => m.Id == membershipId, ct);
+            if (membership is null) return;
+
+            var client = await _db.Clients.FirstOrDefaultAsync(c => c.Id == membership.ClientId, ct);
+            if (client is null) return;
+
+            await using var tx = await _db.Database.BeginTransactionAsync(ct);
+
+            membership.Expire();
+            if (client.CurrentMembershipId == membership.Id)
+            {
+                client.ClearCurrentMembership();
+            }
+
+            await _db.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
         }
     }
 }
