@@ -17,5 +17,7 @@ namespace AlmaApp.WebApi.Services
 
         
         Task CancelMembershipAsync(Guid clientId, string cancelledByUid, CancellationToken ct);
+
+        Task ExpireMembershipAsync(Guid membershipId, CancellationToken ct);
     }
 }
