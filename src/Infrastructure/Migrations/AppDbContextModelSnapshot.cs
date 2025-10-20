@@ -17,7 +17,7 @@ namespace AlmaApp.Infrastructure.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "9.0.9")
+                .HasAnnotation("ProductVersion", "9.0.10")
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
@@ -177,6 +177,94 @@ namespace AlmaApp.Infrastructure.Migrations
                     b.HasIndex("StaffId", "FromUtc");
 
                     b.ToTable("StaffTimeOffs", (string)null);
+                });
+
+            modelBuilder.Entity("AlmaApp.Domain.Biometrics.BiometricSnapshot", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<double?>("AbdomenCm")
+                        .HasColumnType("float");
+
+                    b.Property<int?>("Age")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Allergens")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<double?>("BodyFatKg")
+                        .HasColumnType("float");
+
+                    b.Property<double?>("BodyMassIndex")
+                        .HasColumnType("float");
+
+                    b.Property<double?>("ChestCm")
+                        .HasColumnType("float");
+
+                    b.Property<Guid>("ClientId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("CreatedByUid")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<string>("DietPlan")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<int?>("Gender")
+                        .HasColumnType("int");
+
+                    b.Property<double?>("HeightCm")
+                        .HasColumnType("float");
+
+                    b.Property<double?>("HipsCm")
+                        .HasColumnType("float");
+
+                    b.Property<double?>("LeanMassKg")
+                        .HasColumnType("float");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
+                    b.Property<string>("Pathologies")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<double?>("SleepHours")
+                        .HasColumnType("float");
+
+                    b.Property<DateTime>("TakenAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<double?>("VisceralFatIndex")
+                        .HasColumnType("float");
+
+                    b.Property<double?>("WaistCm")
+                        .HasColumnType("float");
+
+                    b.Property<double?>("WeightMaxKg")
+                        .HasColumnType("float");
+
+                    b.Property<double?>("WeightMinKg")
+                        .HasColumnType("float");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClientId", "TakenAtUtc");
+
+                    b.ToTable("BiometricSnapshots", (string)null);
                 });
 
             modelBuilder.Entity("AlmaApp.Domain.ClassRequests.ClassRequest", b =>
@@ -351,6 +439,134 @@ namespace AlmaApp.Infrastructure.Migrations
                     b.ToTable("Clients", (string)null);
                 });
 
+            modelBuilder.Entity("AlmaApp.Domain.GroupClasses.GroupClass", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Category")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAtLocal")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedByUid")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("DurationMinutes")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("InstructorId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("MaxParticipants")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("RoomId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime>("StartLocal")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Title")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InstructorId", "StartLocal");
+
+                    b.HasIndex("RoomId", "StartLocal");
+
+                    b.ToTable("GroupClasses", (string)null);
+                });
+
+            modelBuilder.Entity("AlmaApp.Domain.GroupClasses.GroupClassParticipant", b =>
+                {
+                    b.Property<Guid>("GroupClassId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ClientId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("JoinedAtLocal")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("LeftAtLocal")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.HasKey("GroupClassId", "ClientId");
+
+                    b.HasIndex("ClientId");
+
+                    b.ToTable("GroupClassParticipants", (string)null);
+                });
+
+            modelBuilder.Entity("AlmaApp.Domain.Memberships.ClientMembership", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("BillingPeriod")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("ClientId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("GETUTCDATE()");
+
+                    b.Property<string>("CreatedByUid")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<DateTime?>("EndUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Nif")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime>("StartUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClientId", "StartUtc");
+
+                    b.HasIndex("ClientId", "Status")
+                        .IsUnique()
+                        .HasFilter("[Status] = 0");
+
+                    b.ToTable("ClientMemberships", (string)null);
+                });
+
             modelBuilder.Entity("AlmaApp.Domain.Rooms.Room", b =>
                 {
                     b.Property<Guid>("Id")
@@ -390,6 +606,59 @@ namespace AlmaApp.Infrastructure.Migrations
                         {
                             t.HasCheckConstraint("CK_Room_Capacity_Positive", "[Capacity] > 0");
                         });
+                });
+
+            modelBuilder.Entity("AlmaApp.Domain.ServiceAppointments.ServiceAppointment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ClientId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedByUid")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<int>("DurationMinutes")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("RoomId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<Guid?>("SecondClientId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("ServiceType")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("StaffId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("StartUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RoomId", "StartUtc");
+
+                    b.HasIndex("StaffId", "StartUtc");
+
+                    b.ToTable("ServiceAppointments", (string)null);
                 });
 
             modelBuilder.Entity("AlmaApp.Domain.Staff.Staff", b =>
@@ -467,6 +736,20 @@ namespace AlmaApp.Infrastructure.Migrations
                         .HasForeignKey("RoomId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("AlmaApp.Domain.GroupClasses.GroupClassParticipant", b =>
+                {
+                    b.HasOne("AlmaApp.Domain.GroupClasses.GroupClass", null)
+                        .WithMany("Participants")
+                        .HasForeignKey("GroupClassId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("AlmaApp.Domain.GroupClasses.GroupClass", b =>
+                {
+                    b.Navigation("Participants");
                 });
 #pragma warning restore 612, 618
         }

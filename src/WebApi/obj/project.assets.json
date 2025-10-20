@@ -1833,8 +1833,9 @@
         "dependencies": {
           "AlmaApp.Application": "1.0.0",
           "AlmaApp.Domain": "1.0.0",
-          "Microsoft.EntityFrameworkCore": "9.0.9",
-          "Microsoft.EntityFrameworkCore.SqlServer": "9.0.0",
+          "Microsoft.EntityFrameworkCore": "9.0.10",
+          "Microsoft.EntityFrameworkCore.Relational": "9.0.10",
+          "Microsoft.EntityFrameworkCore.SqlServer": "9.0.10",
           "Microsoft.Extensions.Configuration": "9.0.9",
           "Microsoft.Extensions.Configuration.EnvironmentVariables": "9.0.9",
           "Microsoft.Extensions.Configuration.Json": "9.0.9"
@@ -5259,7 +5260,10 @@
       "AlmaApp.Infrastructure >= 1.0.0",
       "Microsoft.AspNetCore.Authentication.JwtBearer >= 9.0.9",
       "Microsoft.AspNetCore.OpenApi >= 9.0.9",
-      "Microsoft.EntityFrameworkCore.Design >= 9.*",
+      "Microsoft.EntityFrameworkCore >= 9.0.10",
+      "Microsoft.EntityFrameworkCore.Design >= 9.0.10",
+      "Microsoft.EntityFrameworkCore.Relational >= 9.0.10",
+      "Microsoft.EntityFrameworkCore.SqlServer >= 9.0.10",
       "Swashbuckle.AspNetCore >= 9.0.4"
     ]
   },
@@ -5331,11 +5335,23 @@
             "target": "Package",
             "version": "[9.0.9, )"
           },
+          "Microsoft.EntityFrameworkCore": {
+            "target": "Package",
+            "version": "[9.0.10, )"
+          },
           "Microsoft.EntityFrameworkCore.Design": {
             "include": "Runtime, Build, Native, ContentFiles, Analyzers, BuildTransitive",
             "suppressParent": "All",
             "target": "Package",
-            "version": "[9.*, )"
+            "version": "[9.0.10, )"
+          },
+          "Microsoft.EntityFrameworkCore.Relational": {
+            "target": "Package",
+            "version": "[9.0.10, )"
+          },
+          "Microsoft.EntityFrameworkCore.SqlServer": {
+            "target": "Package",
+            "version": "[9.0.10, )"
           },
           "Swashbuckle.AspNetCore": {
             "target": "Package",

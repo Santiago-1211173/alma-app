@@ -7,6 +7,8 @@ using AlmaApp.Domain.Staff;
 using AlmaApp.Domain.Memberships;
 using Microsoft.EntityFrameworkCore;
 using AlmaApp.Domain.Biometrics;
+using AlmaApp.Domain.ServiceAppointments;
+using AlmaApp.Domain.GroupClasses;
 
 namespace AlmaApp.Infrastructure;
 
@@ -22,10 +24,12 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> opts) : DbContex
     public DbSet<Domain.Availability.StaffAvailabilityRule> StaffAvailabilityRules => Set<Domain.Availability.StaffAvailabilityRule>();
     public DbSet<Domain.Availability.StaffTimeOff> StaffTimeOffs => Set<Domain.Availability.StaffTimeOff>();
     public DbSet<Domain.Availability.RoomClosure> RoomClosures => Set<Domain.Availability.RoomClosure>();
-
     public DbSet<ClientMembership> ClientMemberships => Set<ClientMembership>();
-
     public DbSet<BiometricSnapshot> BiometricSnapshots => Set<BiometricSnapshot>();
+    public DbSet<ServiceAppointment> ServiceAppointments => Set<ServiceAppointment>();
+    public DbSet<GroupClass> GroupClasses => Set<GroupClass>();
+    public DbSet<GroupClassParticipant> GroupClassParticipants => Set<GroupClassParticipant>();
+
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

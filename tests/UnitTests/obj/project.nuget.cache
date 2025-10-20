@@ -1,7 +1,7 @@
 {
   "version": 2,
-  "dgSpecHash": "h/ilT4sNq5g=",
-  "success": false,
+  "dgSpecHash": "ClyDOqHgZR8=",
+  "success": true,
   "projectFilePath": "C:\\Users\\santi\\Desktop\\alma-app\\tests\\UnitTests\\AlmaApp.UnitTests.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\santi\\.nuget\\packages\\azure.core\\1.38.0\\azure.core.1.38.0.nupkg.sha512",
@@ -13,9 +13,9 @@
     "C:\\Users\\santi\\.nuget\\packages\\microsoft.codecoverage\\17.12.0\\microsoft.codecoverage.17.12.0.nupkg.sha512",
     "C:\\Users\\santi\\.nuget\\packages\\microsoft.data.sqlclient\\5.1.6\\microsoft.data.sqlclient.5.1.6.nupkg.sha512",
     "C:\\Users\\santi\\.nuget\\packages\\microsoft.data.sqlclient.sni.runtime\\5.1.1\\microsoft.data.sqlclient.sni.runtime.5.1.1.nupkg.sha512",
-    "C:\\Users\\santi\\.nuget\\packages\\microsoft.entityframeworkcore\\9.0.9\\microsoft.entityframeworkcore.9.0.9.nupkg.sha512",
-    "C:\\Users\\santi\\.nuget\\packages\\microsoft.entityframeworkcore.abstractions\\9.0.9\\microsoft.entityframeworkcore.abstractions.9.0.9.nupkg.sha512",
-    "C:\\Users\\santi\\.nuget\\packages\\microsoft.entityframeworkcore.analyzers\\9.0.9\\microsoft.entityframeworkcore.analyzers.9.0.9.nupkg.sha512",
+    "C:\\Users\\santi\\.nuget\\packages\\microsoft.entityframeworkcore\\9.0.10\\microsoft.entityframeworkcore.9.0.10.nupkg.sha512",
+    "C:\\Users\\santi\\.nuget\\packages\\microsoft.entityframeworkcore.abstractions\\9.0.10\\microsoft.entityframeworkcore.abstractions.9.0.10.nupkg.sha512",
+    "C:\\Users\\santi\\.nuget\\packages\\microsoft.entityframeworkcore.analyzers\\9.0.10\\microsoft.entityframeworkcore.analyzers.9.0.10.nupkg.sha512",
     "C:\\Users\\santi\\.nuget\\packages\\microsoft.entityframeworkcore.inmemory\\9.0.9\\microsoft.entityframeworkcore.inmemory.9.0.9.nupkg.sha512",
     "C:\\Users\\santi\\.nuget\\packages\\microsoft.entityframeworkcore.relational\\9.0.10\\microsoft.entityframeworkcore.relational.9.0.10.nupkg.sha512",
     "C:\\Users\\santi\\.nuget\\packages\\microsoft.entityframeworkcore.sqlserver\\9.0.10\\microsoft.entityframeworkcore.sqlserver.9.0.10.nupkg.sha512",
@@ -86,17 +86,5 @@
     "C:\\Users\\santi\\.nuget\\packages\\xunit.extensibility.execution\\2.9.2\\xunit.extensibility.execution.2.9.2.nupkg.sha512",
     "C:\\Users\\santi\\.nuget\\packages\\xunit.runner.visualstudio\\2.8.2\\xunit.runner.visualstudio.2.8.2.nupkg.sha512"
   ],
-  "logs": [
-    {
-      "code": "NU1605",
-      "level": "Error",
-      "message": "Warning As Error: Detected package downgrade: Microsoft.EntityFrameworkCore from 9.0.10 to 9.0.9. Reference the package directly from the project to select a different version. \r\n AlmaApp.UnitTests -> AlmaApp.WebApi -> AlmaApp.Infrastructure -> Microsoft.EntityFrameworkCore.SqlServer 9.0.10 -> Microsoft.EntityFrameworkCore.Relational 9.0.10 -> Microsoft.EntityFrameworkCore (>= 9.0.10) \r\n AlmaApp.UnitTests -> AlmaApp.WebApi -> AlmaApp.Infrastructure -> Microsoft.EntityFrameworkCore (>= 9.0.9)",
-      "projectPath": "C:\\Users\\santi\\Desktop\\alma-app\\tests\\UnitTests\\AlmaApp.UnitTests.csproj",
-      "filePath": "C:\\Users\\santi\\Desktop\\alma-app\\tests\\UnitTests\\AlmaApp.UnitTests.csproj",
-      "libraryId": "Microsoft.EntityFrameworkCore",
-      "targetGraphs": [
-        "net9.0"
-      ]
-    }
-  ]
+  "logs": []
 }
