@@ -4,15 +4,12 @@ using AlmaApp.Domain.Classes;
 using AlmaApp.Domain.Clients;
 using AlmaApp.Domain.Rooms;
 using AlmaApp.Domain.Staff;
+using AlmaApp.Domain.Memberships;
 using Microsoft.EntityFrameworkCore;
+using AlmaApp.Domain.Biometrics;
 
 namespace AlmaApp.Infrastructure;
 
-/// <summary>
-/// Representa o contexto de base de dados da aplicação. Inclui DbSets para
-/// todas as entidades de domínio e configurações extra para índices e
-/// unicidades. Esta versão foi actualizada para incluir a entidade Activity.
-/// </summary>
 public sealed class AppDbContext(DbContextOptions<AppDbContext> opts) : DbContext(opts)
 {
     public DbSet<Client> Clients => Set<Client>();
@@ -25,6 +22,10 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> opts) : DbContex
     public DbSet<Domain.Availability.StaffAvailabilityRule> StaffAvailabilityRules => Set<Domain.Availability.StaffAvailabilityRule>();
     public DbSet<Domain.Availability.StaffTimeOff> StaffTimeOffs => Set<Domain.Availability.StaffTimeOff>();
     public DbSet<Domain.Availability.RoomClosure> RoomClosures => Set<Domain.Availability.RoomClosure>();
+
+    public DbSet<ClientMembership> ClientMemberships => Set<ClientMembership>();
+
+    public DbSet<BiometricSnapshot> BiometricSnapshots => Set<BiometricSnapshot>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

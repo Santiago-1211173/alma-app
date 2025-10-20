@@ -55,6 +55,7 @@ builder.Services.AddScoped<IMeOnboardingService, MeOnboardingService>();
 builder.Services.AddScoped<IAvailabilityService, AvailabilityService>();
 builder.Services.AddScoped<IAuthorizationHandler, RoleAuthorizationHandler>();       // was Singleton -> Scoped
 builder.Services.AddScoped<IAuthorizationHandler, RolesAnyAuthorizationHandler>();   // was Singleton -> Scoped
+builder.Services.AddScoped<IClientMembershipService, ClientMembershipService>();
 
 builder.Services.AddAuthorization(opt =>
 {
