@@ -7,7 +7,7 @@ using AlmaApp.Domain.Activities;
 
 namespace AlmaApp.WebApi.Services
 {
-    public interface IActivityService
+    public interface IActivitiesService
     {
         Task<PagedResult<ActivityListItemDto>> SearchAsync(
             Guid? roomId, Guid? instructorId, ActivityCategory? category,

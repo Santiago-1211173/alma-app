@@ -2,7 +2,7 @@ using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using AlmaApp.Domain.Activities;
+ using AlmaApp.Domain.Activities;
 using AlmaApp.Infrastructure;
 using AlmaApp.WebApi.Common;
 using AlmaApp.WebApi.Contracts.Activities;
@@ -10,11 +10,16 @@ using Microsoft.EntityFrameworkCore;
 
 namespace AlmaApp.WebApi.Services
 {
-    public sealed class ActivityService : IActivityService
+    public sealed class ActivitiesService : IActivitiesService
     {
         private readonly AppDbContext _db;
+        private readonly IScheduleConflictService _conflict;
 
-        public ActivityService(AppDbContext db) => _db = db;
+        public ActivitiesService(AppDbContext db, IScheduleConflictService conflict)
+        {
+            _db = db;
+            _conflict = conflict;
+        }
 
         public async Task<PagedResult<ActivityListItemDto>> SearchAsync(
             Guid? roomId, Guid? instructorId, ActivityCategory? category,
@@ -51,42 +56,63 @@ namespace AlmaApp.WebApi.Services
                 a.Id, a.RoomId, a.InstructorId, a.Category, a.Title, a.Description,
                 a.StartLocal, a.DurationMinutes, a.MaxParticipants,
                 Math.Max(0, a.MaxParticipants - a.Participants.Count(p => p.Status == ActivityParticipantStatus.Active)),
-                a.Status, a.CreatedByUid, a.CreatedAtLocal
-            );
+                a.Status, a.CreatedByUid, a.CreatedAtLocal);
         }
 
         public async Task<ActivityResponse> CreateAsync(CreateActivityRequestDto dto, string? createdByUid, CancellationToken ct)
         {
-            // validações de existência de sala/instrutor omitidas (adiciona se necessário)
+            var start = dto.StartLocal;
+            var end   = start.AddMinutes(dto.DurationMinutes);
+
+            // validar conflitos (sala/instrutor)
+            var hasConflict = await _conflict.HasConflictAsync(
+                staffId: dto.InstructorId,
+                roomId: dto.RoomId,
+                clientId: null,
+                startLocal: start,
+                endLocal: end,
+                excludeId: null,
+                ct: ct);
+
+            if (hasConflict)
+                throw new InvalidOperationException("Conflito de agenda (sala ou instrutor).");
+
             var act = new Activity(
                 dto.RoomId, dto.InstructorId, dto.Title, dto.Description,
                 dto.Category, dto.StartLocal, dto.DurationMinutes, dto.MaxParticipants,
                 createdByUid, DateTime.Now);
 
-            // Verificar conflitos (sala/instrutor) com outras Activities
-            await EnsureNoConflictsAsync(act.RoomId, act.InstructorId, act.StartLocal, act.EndLocal, excludeId: null, ct);
-
             _db.Activities.Add(act);
             await _db.SaveChangesAsync(ct);
-
             return (await GetByIdAsync(act.Id, ct))!;
         }
 
         public async Task<ActivityResponse> UpdateAsync(Guid id, UpdateActivityRequestDto dto, CancellationToken ct)
         {
-            var act = await _db.Activities.Include(x => x.Participants).FirstOrDefaultAsync(a => a.Id == id, ct);
+            var act = await _db.Activities.Include(a => a.Participants).FirstOrDefaultAsync(a => a.Id == id, ct);
             if (act == null) throw new KeyNotFoundException("Activity not found.");
 
             if (dto.RowVersion != null && !act.RowVersion.SequenceEqual(dto.RowVersion))
                 throw new DbUpdateConcurrencyException("RowVersion outdated.");
 
-            var newEnd = dto.StartLocal.AddMinutes(dto.DurationMinutes);
-            await EnsureNoConflictsAsync(dto.RoomId, dto.InstructorId, dto.StartLocal, newEnd, id, ct);
+            var start = dto.StartLocal;
+            var end   = start.AddMinutes(dto.DurationMinutes);
+
+            var hasConflict = await _conflict.HasConflictAsync(
+                staffId: dto.InstructorId,
+                roomId: dto.RoomId,
+                clientId: null,
+                startLocal: start,
+                endLocal: end,
+                excludeId: id,
+                ct: ct);
+
+            if (hasConflict)
+                throw new InvalidOperationException("Conflito de agenda (sala ou instrutor).");
 
             act.Update(dto.RoomId, dto.InstructorId, dto.Title, dto.Description, dto.Category,
                        dto.StartLocal, dto.DurationMinutes, dto.MaxParticipants);
             await _db.SaveChangesAsync(ct);
-
             return (await GetByIdAsync(act.Id, ct))!;
         }
 
@@ -110,6 +136,23 @@ namespace AlmaApp.WebApi.Services
         {
             var act = await _db.Activities.Include(a => a.Participants).FirstOrDefaultAsync(a => a.Id == id, ct);
             if (act == null) throw new KeyNotFoundException("Activity not found.");
+
+            // Garantir que o cliente não tem outro agendamento noutra entidade
+            var start = act.StartLocal;
+            var end   = act.EndLocal;
+
+            var clientConflict = await _conflict.HasConflictAsync(
+                staffId: null,
+                roomId: null,
+                clientId: clientId,
+                startLocal: start,
+                endLocal: end,
+                excludeId: id,
+                ct: ct);
+
+            if (clientConflict)
+                throw new InvalidOperationException("O cliente já tem outro agendamento nesta hora.");
+
             act.AddParticipant(clientId, nowLocal);
             await _db.SaveChangesAsync(ct);
         }
@@ -121,30 +164,5 @@ namespace AlmaApp.WebApi.Services
             act.RemoveParticipant(clientId, nowLocal);
             await _db.SaveChangesAsync(ct);
         }
-
-        private async Task EnsureNoConflictsAsync(Guid roomId, Guid instructorId,
-            DateTime startLocal, DateTime endLocal, Guid? excludeId, CancellationToken ct)
-        {
-            bool conflictRoom = await _db.Activities
-                .AnyAsync(a =>
-                    a.Status == ActivityStatus.Scheduled &&
-                    a.RoomId == roomId &&
-                    Overlaps(startLocal, endLocal, a.StartLocal, a.StartLocal.AddMinutes(a.DurationMinutes)) &&
-                    (excludeId == null || a.Id != excludeId.Value), ct);
-
-            if (conflictRoom) throw new InvalidOperationException("Conflito com agenda da sala.");
-
-            bool conflictInstructor = await _db.Activities
-                .AnyAsync(a =>
-                    a.Status == ActivityStatus.Scheduled &&
-                    a.InstructorId == instructorId &&
-                    Overlaps(startLocal, endLocal, a.StartLocal, a.StartLocal.AddMinutes(a.DurationMinutes)) &&
-                    (excludeId == null || a.Id != excludeId.Value), ct);
-
-            if (conflictInstructor) throw new InvalidOperationException("Conflito com agenda do instrutor.");
-        }
-
-        private static bool Overlaps(DateTime aStart, DateTime aEnd, DateTime bStart, DateTime bEnd)
-            => aStart < bEnd && bStart < aEnd;
     }
 }

@@ -17,9 +17,9 @@ namespace AlmaApp.WebApi.Controllers
     [Route("api/v1/activities")]
     public sealed class ActivitiesController : ControllerBase
     {
-        private readonly IActivityService _service;
+        private readonly IActivitiesService _service;
 
-        public ActivitiesController(IActivityService service) => _service = service;
+        public ActivitiesController(IActivitiesService service) => _service = service;
 
         [HttpGet]
         public async Task<ActionResult<PagedResult<ActivityListItemDto>>> Search(

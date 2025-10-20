@@ -57,9 +57,8 @@ builder.Services.AddScoped<IAuthorizationHandler, RolesAnyAuthorizationHandler>(
 builder.Services.AddScoped<IClientMembershipService, ClientMembershipService>();
 builder.Services.AddScoped<IServiceAppointmentService, ServiceAppointmentService>();
 builder.Services.AddScoped<IGroupClassService, GroupClassService>();
-builder.Services.AddScoped<IActivityService, ActivityService>();
-
-
+builder.Services.AddScoped<IActivitiesService, ActivitiesService>();
+builder.Services.AddScoped<IScheduleConflictService, ScheduleConflictService>();
 
 builder.Services.AddAuthorization(opt =>
 {

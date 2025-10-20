@@ -1,6 +1,6 @@
 using System;
-using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using AlmaApp.Domain.GroupClasses;
 using AlmaApp.Infrastructure;
@@ -13,8 +13,13 @@ namespace AlmaApp.WebApi.Services
     public sealed class GroupClassService : IGroupClassService
     {
         private readonly AppDbContext _db;
+        private readonly IScheduleConflictService _conflict;
 
-        public GroupClassService(AppDbContext db) => _db = db;
+        public GroupClassService(AppDbContext db, IScheduleConflictService conflict)
+        {
+            _db = db;
+            _conflict = conflict;
+        }
 
         public async Task<PagedResult<GroupClassListItemDto>> SearchAsync(
             GroupClassCategory? category, Guid? instructorId, Guid? roomId,
@@ -23,21 +28,21 @@ namespace AlmaApp.WebApi.Services
         {
             var q = _db.GroupClasses.AsNoTracking().AsQueryable();
 
-            if (category.HasValue) q = q.Where(x => x.Category == category.Value);
-            if (instructorId.HasValue) q = q.Where(x => x.InstructorId == instructorId.Value);
-            if (roomId.HasValue) q = q.Where(x => x.RoomId == roomId.Value);
-            if (fromLocal.HasValue) q = q.Where(x => x.StartLocal >= fromLocal.Value);
-            if (toLocal.HasValue) q = q.Where(x => x.StartLocal < toLocal.Value);
+            if (category.HasValue) q = q.Where(g => g.Category == category.Value);
+            if (instructorId.HasValue) q = q.Where(g => g.InstructorId == instructorId.Value);
+            if (roomId.HasValue) q = q.Where(g => g.RoomId == roomId.Value);
+            if (fromLocal.HasValue) q = q.Where(g => g.StartLocal >= fromLocal.Value);
+            if (toLocal.HasValue) q = q.Where(g => g.StartLocal < toLocal.Value);
 
-            q = q.OrderBy(x => x.StartLocal);
+            q = q.OrderBy(g => g.StartLocal);
 
             var total = await q.CountAsync(ct);
             var items = await q.Skip((page - 1) * pageSize).Take(pageSize)
-                .Select(x => new GroupClassListItemDto(
-                    x.Id, x.Category, x.Title, x.InstructorId, x.RoomId,
-                    x.StartLocal, x.DurationMinutes, x.MaxParticipants,
-                    Math.Max(0, x.MaxParticipants - x.Participants.Count(p => p.Status == GroupClassParticipantStatus.Active)),
-                    x.Status))
+                .Select(g => new GroupClassListItemDto(
+                    g.Id, g.Category, g.Title, g.InstructorId, g.RoomId, g.StartLocal,
+                    g.DurationMinutes, g.MaxParticipants,
+                    Math.Max(0, g.MaxParticipants - g.Participants.Count(p => p.Status == GroupClassParticipantStatus.Active)),
+                    g.Status))
                 .ToListAsync(ct);
 
             return PagedResult<GroupClassListItemDto>.Create(items, page, pageSize, total);
@@ -45,35 +50,39 @@ namespace AlmaApp.WebApi.Services
 
         public async Task<GroupClassResponse?> GetByIdAsync(Guid id, CancellationToken ct)
         {
-            var x = await _db.GroupClasses
-                .AsNoTracking()
-                .Include(g => g.Participants)
-                .FirstOrDefaultAsync(g => g.Id == id, ct);
-
-            return x == null
-                ? null
-                : new GroupClassResponse(
-                    x.Id, x.Category, x.Title, x.InstructorId, x.RoomId,
-                    x.StartLocal, x.DurationMinutes, x.MaxParticipants,
-                    Math.Max(0, x.MaxParticipants - x.Participants.Count(p => p.Status == GroupClassParticipantStatus.Active)),
-                    x.Status,
-                    x.Participants.Count(p => p.Status == GroupClassParticipantStatus.Active));
+            var g = await _db.GroupClasses.AsNoTracking().Include(gc => gc.Participants).FirstOrDefaultAsync(gc => gc.Id == id, ct);
+            return g == null ? null : new GroupClassResponse(
+                g.Id, g.Category, g.Title, g.InstructorId, g.RoomId, g.StartLocal,
+                g.DurationMinutes, g.MaxParticipants,
+                Math.Max(0, g.MaxParticipants - g.Participants.Count(p => p.Status == GroupClassParticipantStatus.Active)),
+                g.Status, g.Participants.Count(p => p.Status == GroupClassParticipantStatus.Active));
         }
 
         public async Task<GroupClassResponse> CreateAsync(CreateGroupClassRequestDto req, string? createdByUid, CancellationToken ct)
         {
+            var start = req.StartLocal;
+            var end   = start.AddMinutes(req.DurationMinutes);
+
+            var conflict = await _conflict.HasConflictAsync(
+                staffId: req.InstructorId,
+                roomId: req.RoomId,
+                clientId: null,
+                startLocal: start,
+                endLocal: end,
+                excludeId: null,
+                ct: ct);
+
+            if (conflict)
+                throw new InvalidOperationException("Conflito de agenda (instrutor ou sala).");
+
             var gc = new GroupClass(
                 req.InstructorId, req.RoomId, req.Category, req.Title,
                 req.StartLocal, req.DurationMinutes, req.MaxParticipants,
                 createdByUid, DateTime.Now);
 
-            // conflitos de agenda (instrutor/sala)
-            await EnsureNoConflictsAsync(gc.InstructorId, gc.RoomId, gc.StartLocal, gc.EndLocal, excludeId: null, ct);
-
             _db.GroupClasses.Add(gc);
             await _db.SaveChangesAsync(ct);
-
-            return await GetByIdAsync(gc.Id, ct) ?? throw new InvalidOperationException("Erro ao ler aula criada.");
+            return (await GetByIdAsync(gc.Id, ct))!;
         }
 
         public async Task<GroupClassResponse> UpdateAsync(Guid id, UpdateGroupClassRequestDto req, CancellationToken ct)
@@ -81,18 +90,27 @@ namespace AlmaApp.WebApi.Services
             var gc = await _db.GroupClasses.Include(x => x.Participants).FirstOrDefaultAsync(x => x.Id == id, ct);
             if (gc == null) throw new KeyNotFoundException("Aula não encontrada.");
 
-            // concorrência optimista
             if (req.RowVersion != null && !gc.RowVersion.SequenceEqual(req.RowVersion))
                 throw new DbUpdateConcurrencyException("RowVersion desactualizado.");
 
-            // valida conflitos
-            var newEnd = req.StartLocal.AddMinutes(req.DurationMinutes);
-            await EnsureNoConflictsAsync(req.InstructorId, req.RoomId, req.StartLocal, newEnd, id, ct);
+            var start = req.StartLocal;
+            var end   = start.AddMinutes(req.DurationMinutes);
+
+            var conflict = await _conflict.HasConflictAsync(
+                staffId: req.InstructorId,
+                roomId: req.RoomId,
+                clientId: null,
+                startLocal: start,
+                endLocal: end,
+                excludeId: id,
+                ct: ct);
+
+            if (conflict)
+                throw new InvalidOperationException("Conflito de agenda (instrutor ou sala).");
 
             gc.Update(req.InstructorId, req.RoomId, req.Category, req.Title, req.StartLocal, req.DurationMinutes, req.MaxParticipants);
             await _db.SaveChangesAsync(ct);
-
-            return await GetByIdAsync(gc.Id, ct) ?? throw new InvalidOperationException("Erro ao ler aula actualizada.");
+            return (await GetByIdAsync(gc.Id, ct))!;
         }
 
         public async Task CancelAsync(Guid id, CancellationToken ct)
@@ -116,12 +134,21 @@ namespace AlmaApp.WebApi.Services
             var gc = await _db.GroupClasses.Include(x => x.Participants).FirstOrDefaultAsync(x => x.Id == id, ct);
             if (gc == null) throw new KeyNotFoundException("Aula não encontrada.");
 
-            // proibir dupla inscrição activa
-            if (gc.Participants.Any(p => p.ClientId == clientId && p.Status == GroupClassParticipantStatus.Active))
-                throw new InvalidOperationException("Cliente já inscrito.");
+            var start = gc.StartLocal;
+            var end   = gc.EndLocal;
 
-            if (gc.AvailableSlots <= 0)
-                throw new InvalidOperationException("Aula sem vagas.");
+            // Verifica se o cliente já está noutra agenda
+            var conflict = await _conflict.HasConflictAsync(
+                staffId: null,
+                roomId: null,
+                clientId: clientId,
+                startLocal: start,
+                endLocal: end,
+                excludeId: id,
+                ct: ct);
+
+            if (conflict)
+                throw new InvalidOperationException("Cliente já tem outra marcação neste horário.");
 
             gc.AddParticipant(clientId, nowLocal);
             await _db.SaveChangesAsync(ct);
@@ -134,29 +161,5 @@ namespace AlmaApp.WebApi.Services
             gc.RemoveParticipant(clientId, nowLocal);
             await _db.SaveChangesAsync(ct);
         }
-
-        private async Task EnsureNoConflictsAsync(Guid instructorId, Guid roomId, DateTime startLocal, DateTime endLocal, Guid? excludeId, CancellationToken ct)
-        {
-            bool conflictInstructor = await _db.GroupClasses
-                .AnyAsync(x =>
-                    x.Status == GroupClassStatus.Scheduled &&
-                    x.InstructorId == instructorId &&
-                    Overlaps(startLocal, endLocal, x.StartLocal, x.StartLocal.AddMinutes(x.DurationMinutes)) &&
-                    (excludeId == null || x.Id != excludeId.Value), ct);
-
-            if (conflictInstructor) throw new InvalidOperationException("Conflito com agenda do instrutor.");
-
-            bool conflictRoom = await _db.GroupClasses
-                .AnyAsync(x =>
-                    x.Status == GroupClassStatus.Scheduled &&
-                    x.RoomId == roomId &&
-                    Overlaps(startLocal, endLocal, x.StartLocal, x.StartLocal.AddMinutes(x.DurationMinutes)) &&
-                    (excludeId == null || x.Id != excludeId.Value), ct);
-
-            if (conflictRoom) throw new InvalidOperationException("Conflito com agenda da sala.");
-        }
-
-        private static bool Overlaps(DateTime aStart, DateTime aEnd, DateTime bStart, DateTime bEnd)
-            => aStart < bEnd && bStart < aEnd;
     }
 }
