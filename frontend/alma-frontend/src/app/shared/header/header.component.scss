@@ -1,25 +1,99 @@
+/* topbar geral */
 .topbar{
-  position:sticky; top:0; z-index:1000;
-  background:var(--alma-dark); color:#eee;
-  border-bottom:3px solid var(--line);
+  background: #292929; color:#F1EADA; border-bottom:3px solid #E7D9C4;
 }
-.bar{
-  display:grid; grid-template-columns: 1fr auto auto; align-items:center;
-  gap:24px; padding:14px 0;
+/* banner com o título e o link */
+.header-banner{
+  display:flex; justify-content:space-between; align-items:center;
+  padding: 24px 0;
 }
-.brand .logo{ font-family:'Dream Avenue','Alegreya Sans SC',serif; font-size:40px; line-height:1; letter-spacing:.5px;}
-.brand .subtitle{ font-family:'Alegreya Sans SC',sans-serif; font-size:12px; opacity:.8; margin-top:2px; }
+.small-title{ font-family:'Dream Avenue'; font-size:32px; }
+.logo{ font-family:'Dream Avenue'; font-size:72px; line-height:1; margin:0 0 8px; }
+.sub-title{ font-family:'Alegreya Sans SC'; font-size:14px; letter-spacing:2px; }
 
-.nav{ display:flex; gap:10px; }
-.nav a{
-  padding:8px 12px; border:1px solid var(--line); border-radius:6px;
-  background:#4b413a; transition:filter .15s ease;
+/* nav-bar */
+.nav-bar{
+  position: relative;
+  background:#584738; 
+  border-top:3px solid #E7D9C4;
+  border-bottom:3px solid #E7D9C4;
 }
-.nav a:hover{ filter:brightness(1.08) }
-.nav a.active{ outline:2px solid var(--line); background:#6a5a51; }
 
-.auth{
-  font-family:'Alegreya Sans SC',sans-serif;
-  padding:8px 12px; border:1px solid var(--line); border-radius:6px; background:#4b413a; color:#eee;
-  cursor:pointer;
+.nav-list{ list-style:none; margin:0; padding:0; display:flex; }
+.nav-item{
+  position:relative; border-left:3px solid #E7D9C4;
 }
+.nav-item:first-child{ border-left: none; }
+.nav-item a, .nav-item .label{
+  display:block; padding:12px 24px; cursor:pointer;
+  font-family:'Alegreya Sans SC'; color:#F1EADA; white-space:nowrap;
+}
+.nav-item:hover > .label,
+.nav-item a.active{ background:#F1EADA; color:#292929; }
+
+/* sub-menu comum */
+.sub-menu{
+  display:none;
+  position: absolute;
+  left: 0;            /* começa no extremo esquerdo */
+  right: 0;           /* ocupa até ao extremo direito */
+  top: 100%;          /* coloca logo abaixo da nav-bar */
+  background:#F1EADA; 
+  border-top:3px solid #E7D9C4; 
+  border-bottom:3px solid #E7D9C4;
+  padding: 20px;      /* espaço interior para o texto */
+  z-index: 200;       /* garante que aparece acima dos restantes elementos */
+}
+
+.nav-item:hover > .sub-menu{
+  display:block;
+}
+
+/* lista simples */
+.sub-menu ul{
+  list-style:none;
+  margin:0;
+  padding:0;
+  text-align:left;
+}
+
+.sub-menu li{
+  margin:10px 0;
+  font-family:'Alegreya Sans SC', sans-serif;
+  font-size:18px;
+}
+
+.sub-menu a{ color:#292929; }
+
+.submenu-content{
+  display:flex;
+  align-items:flex-start;
+}
+
+.submenu-left{
+  flex:0 0 30%; /* 30% da largura para o texto, ajusta conforme o design */
+}
+
+.submenu-right{
+  flex:1; 
+  display:flex;
+  gap:12px;
+  justify-content:flex-end;
+}
+.submenu-right img{
+  width:260px;  /* tamanho aproximado das imagens no mockup */
+  height:180px;
+  object-fit:cover;
+  border:3px solid #a79276;
+}
+
+
+/* estrutura em colunas para Exercício Físico */
+.exercicio-sub{
+  display:flex; gap:24px;
+}
+.exercicio-sub .column{ min-width:180px; }
+.exercicio-sub h3{ font-family:'Dream Avenue'; margin:0 0 8px; font-size:20px; }
+.exercicio-sub ul{ list-style:none; margin:0; padding:0; }
+.exercicio-sub li{ margin:4px 0; }
+.img-col img{ width:200px; height:160px; object-fit:cover; border:3px solid #a79276; }

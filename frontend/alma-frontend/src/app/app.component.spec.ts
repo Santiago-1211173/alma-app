@@ -17,7 +17,7 @@ describe('AppComponent', () => {
   it(`should have the 'alma-frontend' title`, () => {
     const fixture = TestBed.createComponent(AppComponent);
     const app = fixture.componentInstance;
-    expect(app.title).toEqual('alma-frontend');
+    expect((app as any).title).toEqual('alma-frontend');
   });
 
   it('should render title', () => {

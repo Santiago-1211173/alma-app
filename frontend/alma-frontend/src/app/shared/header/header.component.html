@@ -1,20 +1,46 @@
 <header class="topbar">
-  <div class="container bar">
-    <div class="brand">
+  <div class="header-banner container">
+    <div>
+      <div class="small-title">BEM-VINDA À</div>
       <div class="logo">alma</div>
-      <div class="subtitle">WELLNESS CLUB</div>
+      <div class="sub-title">WELLNESS CLUB</div>
     </div>
-
-    <nav class="nav">
-      <a routerLink="/a-alma" routerLinkActive="active">A Alma</a>
-      <a routerLink="/beneficios-membro" routerLinkActive="active">Benefícios Membro</a>
-      <a routerLink="/workshops" routerLinkActive="active">Workshops</a>
-      <a routerLink="/bem-estar" routerLinkActive="active">Bem Estar</a>
-      <a routerLink="/exercicio-fisico" routerLinkActive="active">Exercício Físico</a>
-      <a routerLink="/kids" routerLinkActive="active">Kids</a>
-    </nav>
-
-    <button class="auth" *ngIf="!(loggedIn$ | async)" (click)="login()">Registe-se / Inicie sessão</button>
-    <button class="auth" *ngIf="loggedIn$ | async" (click)="logout()">Terminar sessão</button>
+    <a class="auth-link" routerLink="/auth">Registe-se / Inicie sessão</a>
   </div>
+
+  <nav class="nav-bar">
+    <ul class="nav-list container">
+      <li
+        *ngFor="let item of navItems"
+        class="nav-item"
+        [class.with-submenu]="item.submenu"
+        (mouseenter)="item.submenu && showSubmenu(item)"
+        (mouseleave)="hideSubmenu()"
+      >
+        <a *ngIf="!item.submenu" [routerLink]="item.route" routerLinkActive="active">
+          {{ item.label }}
+        </a>
+        <span *ngIf="item.submenu" class="label">{{ item.label }}</span>
+
+        <!-- SUBMENU A LARGURA TOTAL -->
+        <div class="sub-menu" *ngIf="openItem === item">
+          <div class="submenu-content container">
+            <!-- Texto à esquerda -->
+            <div class="submenu-left">
+              <ul>
+                <li *ngFor="let sub of item.submenu">
+                  <a [routerLink]="sub.route">{{ sub.label }}</a>
+                </li>
+              </ul>
+            </div>
+
+            <!-- Imagens à direita (opcional) -->
+            <div class="submenu-right" *ngIf="item.images?.length">
+              <img *ngFor="let img of item.images" [src]="img" alt="" />
+            </div>
+          </div>
+        </div>
+      </li>
+    </ul>
+  </nav>
 </header>
