@@ -1,6 +1,8 @@
-import { Component } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink, RouterLinkActive } from '@angular/router';
+import { AuthService } from '../../core/auth.service';
+import { map } from 'rxjs/operators';
 
 type SubItem = { label: string; route: string };
 type NavItem = {
@@ -17,7 +19,20 @@ type NavItem = {
   templateUrl: './header.component.html',
   styleUrls: ['./header.component.scss'],
 })
+
+
 export class HeaderComponent {
+  loggedIn$: any;
+  loggingIn$: any;
+
+  constructor(public auth: AuthService) {
+    this.loggedIn$ = this.auth.user$.pipe(map(u => !!u));
+    this.loggingIn$ = this.auth.loggingIn$;
+  }
+
+  login()  { this.auth.loginWithGoogle(); }
+  logout() { this.auth.logout(); }
+
   openItem: NavItem | null = null;
 
   navItems: NavItem[] = [

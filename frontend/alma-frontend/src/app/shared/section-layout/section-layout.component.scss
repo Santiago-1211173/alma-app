@@ -1,0 +1,7 @@
+/* section-layout.component.scss */
+.panel {
+  background: inherit;            /* herdada do body */
+  border-top: none;
+  border-bottom: none;
+  padding: 0;                     /* retira a margem superior se não precisa */
+}

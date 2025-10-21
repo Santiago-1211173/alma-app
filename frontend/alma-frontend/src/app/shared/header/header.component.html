@@ -5,7 +5,9 @@
       <div class="logo">alma</div>
       <div class="sub-title">WELLNESS CLUB</div>
     </div>
-    <a class="auth-link" routerLink="/auth">Registe-se / Inicie sessão</a>
+    <!-- header.component.html (apenas a linha do botão de autenticação) -->
+      <button *ngIf="!(loggedIn$ | async)" class="auth-link" (click)="login()">Registe-se / Inicie sessão</button>
+      <button *ngIf="loggedIn$ | async" class="auth-link" (click)="logout()">Terminar sessão</button>
   </div>
 
   <nav class="nav-bar">

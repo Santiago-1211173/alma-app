@@ -21,7 +21,7 @@
 
 .nav-list{ list-style:none; margin:0; padding:0; display:flex; }
 .nav-item{
-  position:relative; border-left:3px solid #E7D9C4;
+  position:relative; border-left:3px solid #584738;
 }
 .nav-item:first-child{ border-left: none; }
 .nav-item a, .nav-item .label{
@@ -34,11 +34,11 @@
 /* sub-menu comum */
 .sub-menu{
   display:none;
-  position: absolute;
-  left: 0;            /* começa no extremo esquerdo */
-  right: 0;           /* ocupa até ao extremo direito */
+  
+  left: 0%;            /* começa no extremo esquerdo */
+  right: 0%;           /* ocupa até ao extremo direito */
   top: 100%;          /* coloca logo abaixo da nav-bar */
-  background:#F1EADA; 
+  background:#584738; 
   border-top:3px solid #E7D9C4; 
   border-bottom:3px solid #E7D9C4;
   padding: 20px;      /* espaço interior para o texto */
@@ -46,6 +46,7 @@
 }
 
 .nav-item:hover > .sub-menu{
+  color: #584738; 
   display:block;
 }
 
@@ -70,8 +71,22 @@
   align-items:flex-start;
 }
 
-.submenu-left{
-  flex:0 0 30%; /* 30% da largura para o texto, ajusta conforme o design */
+.submenu-left {
+  flex: 0 1 340px;        /* largura base */
+  min-width: 260px;
+  text-align: left !important;  /* força o alinhamento à esquerda */
+}
+
+.submenu-left ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  text-align: left !important;  /* idem aqui */
+}
+
+.submenu-left li {
+  margin: 10px 0;
+  font-size: 18px;
 }
 
 .submenu-right{
@@ -81,7 +96,7 @@
   justify-content:flex-end;
 }
 .submenu-right img{
-  width:260px;  /* tamanho aproximado das imagens no mockup */
+  width: 240px;  /* tamanho aproximado das imagens no mockup */
   height:180px;
   object-fit:cover;
   border:3px solid #a79276;
