@@ -1,0 +1,25 @@
+.topbar{
+  position:sticky; top:0; z-index:1000;
+  background:var(--alma-dark); color:#eee;
+  border-bottom:3px solid var(--line);
+}
+.bar{
+  display:grid; grid-template-columns: 1fr auto auto; align-items:center;
+  gap:24px; padding:14px 0;
+}
+.brand .logo{ font-family:'Dream Avenue','Alegreya Sans SC',serif; font-size:40px; line-height:1; letter-spacing:.5px;}
+.brand .subtitle{ font-family:'Alegreya Sans SC',sans-serif; font-size:12px; opacity:.8; margin-top:2px; }
+
+.nav{ display:flex; gap:10px; }
+.nav a{
+  padding:8px 12px; border:1px solid var(--line); border-radius:6px;
+  background:#4b413a; transition:filter .15s ease;
+}
+.nav a:hover{ filter:brightness(1.08) }
+.nav a.active{ outline:2px solid var(--line); background:#6a5a51; }
+
+.auth{
+  font-family:'Alegreya Sans SC',sans-serif;
+  padding:8px 12px; border:1px solid var(--line); border-radius:6px; background:#4b413a; color:#eee;
+  cursor:pointer;
+}

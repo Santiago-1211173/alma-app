@@ -1,0 +1,25 @@
+.hero{
+  background:#2b2a2a; color:#f1ead9; text-align:center; padding:48px 12px;
+  border-bottom:3px solid #e7d9c4;
+  span{color:#f1ead9}
+}
+.grid{
+  display:grid; grid-template-columns: 1fr 1.2fr; gap:24px; padding:24px;
+  background:#d3c3ae;
+}
+.left ul{list-style:none; padding:0; margin:0}
+.left li{padding:10px 0; font-size:18px}
+.right{display:grid; grid-template-columns:1fr 1fr; gap:16px}
+.img{background:#c2b19a; height:220px; border:6px solid #a79276;}
+.placeholder{display:flex; align-items:center; justify-content:center; color:#3b2f27}
+
+.hero h1{
+  font-family: 'Dream Avenue','Alegreya Sans SC', serif;
+  font-size: clamp(40px, 5vw, 64px);
+  letter-spacing:.5px;
+}
+.hero p{
+  font-family: 'Alegreya Sans SC', system-ui, sans-serif;
+  letter-spacing: 2px;
+}
+

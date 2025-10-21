@@ -64,3 +64,7 @@ coverage*.info
 # Ignora ficheiros appsettings de ambiente, excepto o principal.
 appsettings.*.json
 !appsettings.json
+
+# Ignorar dependências do frontend
+frontend/alma-frontend/node_modules/
+frontend/alma-frontend/dist/

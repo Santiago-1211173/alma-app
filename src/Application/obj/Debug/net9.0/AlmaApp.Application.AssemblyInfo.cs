@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("AlmaApp.Application")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+69d2bf46b9cca65f8ad1a47e7b83af15c6b44230")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+2690dfa41ee7d8038c4a041515989190945555c1")]
 [assembly: System.Reflection.AssemblyProductAttribute("AlmaApp.Application")]
 [assembly: System.Reflection.AssemblyTitleAttribute("AlmaApp.Application")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
