@@ -11,6 +11,7 @@ public class Client
     public string? FirebaseUid { get; private set; }
     public DateOnly? BirthDate { get; private set; }
     public DateTime CreatedAtUtc { get; private set; } = DateTime.UtcNow;
+    public Guid? CurrentMembershipId { get; private set; }
 
     // EF precisa disto
     private Client() { }
@@ -50,6 +51,17 @@ public class Client
     {
         if (string.IsNullOrWhiteSpace(uid)) throw new ArgumentException(nameof(uid));
         FirebaseUid = uid.Trim();
+    }
+
+    public void SetCurrentMembership(Guid membershipId)
+    {
+        if (membershipId == Guid.Empty) throw new ArgumentException(nameof(membershipId));
+        CurrentMembershipId = membershipId;
+    }
+
+    public void ClearCurrentMembership()
+    {
+        CurrentMembershipId = null;
     }
 
 }
